@@ -41,9 +41,17 @@ Note: `.gitignore` was attempted but the connector blocked the file creation. Ad
 - [x] Added Vietnamese HTML report: `scripts/content-audit/lib/report-html.mjs`
 - [x] CLI now generates inventory CSV, action plan CSV, Markdown report, and HTML report
 
+### Phase 5 - Duplicate And Cluster Detection
+
+- [x] Added cluster detection helper: `scripts/content-audit/lib/cluster-pages.mjs`
+- [x] CLI now generates `clusters.json`
+- [x] Markdown report now includes duplicate/overlap cluster section
+- [x] HTML report now includes duplicate/overlap cluster section
+- [x] CLI now prints Vietnamese cluster summary at the end
+
 ## Current MVP Status
 
-The project can now run a basic inventory, scoring, and report audit:
+The project can now run a basic inventory, scoring, report, and cluster audit:
 
 ```bash
 npm install
@@ -59,6 +67,7 @@ Expected outputs:
 ```txt
 audits/content/example-test/inventory.json
 audits/content/example-test/rule_findings.json
+audits/content/example-test/clusters.json
 audits/content/example-test/inventory.csv
 audits/content/example-test/content_action_plan.csv
 audits/content/example-test/content_audit_report.md
@@ -76,28 +85,30 @@ Each URL in `rule_findings.json` includes:
 - `notes_vi`
 - `score_sections`
 
-The terminal summary is Vietnamese-first, for example:
+## Current Cluster Output
 
-```txt
-Tóm tắt chấm điểm nội dung:
-- Tổng URL: 20
-- Điểm trung bình: 72/100
-- Tốt: 5
-- Cần rà soát: 10
-- Yếu: 4
-- Rủi ro cao: 1
-```
+Each cluster in `clusters.json` includes:
 
-## Current Report Output
+- `cluster_id`
+- `type`
+- `topic_hint`
+- `urls`
+- `risk`
+- `server_reason`
+- `url_count`
+- `cluster_hash`
 
-- `inventory.csv`: bảng dữ liệu page đã extract
-- `content_action_plan.csv`: action plan cho SEO/content review
-- `content_audit_report.md`: báo cáo Markdown tiếng Việt
-- `content_audit_report.html`: báo cáo HTML tiếng Việt có thể mở bằng browser
+Cluster detection currently checks:
+
+- duplicate title
+- duplicate meta description
+- similar slug
+- similar H1
+- simple Vietnamese keyword overlap
 
 ## Known Limitations
 
-- No duplicate/cluster detection yet beyond duplicate title/meta scoring
+- Cluster logic is still lightweight and deterministic
 - No LLM policy/client yet
 - WordPress REST source is not implemented yet
 - Internal/external link extraction is currently a placeholder
@@ -106,16 +117,15 @@ Tóm tắt chấm điểm nội dung:
 
 ## Next Phase
 
-Phase 5 - Duplicate And Cluster Detection
+Phase 6 - Cache And Re-Audit
 
 Planned files:
 
-- `scripts/content-audit/lib/cluster-pages.mjs`
-- update `scripts/content-audit/lib/report-md.mjs`
-- update `scripts/content-audit/lib/report-html.mjs`
+- `scripts/content-audit/lib/cache.mjs`
 - update `scripts/content-audit/content-audit.mjs`
+- update reports with delta summary
 
 Planned outputs:
 
-- `clusters.json`
-- cluster section in Markdown/HTML reports
+- cache folder for page fingerprints
+- delta report for new, changed, unchanged, and persistent issues

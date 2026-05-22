@@ -6,10 +6,11 @@ export async function writeHtmlReport(filePath, report) {
 }
 
 export function buildHtmlReport(report) {
-  const { generatedAt, inputUrl, source, summary, findings } = report;
+  const { generatedAt, inputUrl, source, summary, clusterSummary, findings, clusters = [] } = report;
   const priorityItems = findings
     .filter((item) => ['high_risk', 'weak', 'needs_review'].includes(item.severity))
     .slice(0, 30);
+  const priorityClusters = clusters.filter((item) => ['high', 'medium'].includes(item.risk)).slice(0, 20);
 
   return `<!doctype html>
 <html lang="vi">
@@ -38,7 +39,7 @@ export function buildHtmlReport(report) {
     <section class="card">
       <h1>Báo cáo Content Audit</h1>
       <p class="small">Nguồn kiểm tra: ${escapeHtml(inputUrl)} | Loại nguồn: ${escapeHtml(source)} | Tạo lúc: ${escapeHtml(generatedAt)}</p>
-      <p>${escapeHtml(buildQuickComment(summary))}</p>
+      <p>${escapeHtml(buildQuickComment(summary, clusterSummary))}</p>
     </section>
 
     <section class="card">
@@ -50,6 +51,7 @@ export function buildHtmlReport(report) {
         ${metric('Cần rà soát', summary.needs_review)}
         ${metric('Yếu', summary.weak)}
         ${metric('Rủi ro cao', summary.high_risk)}
+        ${metric('Cụm chồng chéo', clusterSummary?.total ?? 0)}
       </div>
     </section>
 
@@ -59,11 +61,16 @@ export function buildHtmlReport(report) {
     </section>
 
     <section class="card">
+      <h2>Cụm trùng lặp/chồng chéo</h2>
+      ${buildClusterTable(priorityClusters)}
+    </section>
+
+    <section class="card">
       <h2>Gợi ý xử lý</h2>
       <ul>
         <li>Ưu tiên URL rủi ro cao trước.</li>
         <li>Với trang yếu, kiểm tra title, meta description, H1/H2, độ dài nội dung và internal link.</li>
-        <li>Với trang có dấu hiệu trùng lặp, chưa tự merge/redirect; cần review thủ công.</li>
+        <li>Với cụm trùng lặp/chồng chéo, chưa tự merge/redirect; cần review thủ công để chọn bài trụ cột.</li>
         <li>Tool hiện chỉ audit và xuất khuyến nghị, không tự sửa website.</li>
       </ul>
     </section>
@@ -95,9 +102,30 @@ function buildPriorityTable(items) {
   </table>`;
 }
 
-function buildQuickComment(summary) {
+function buildClusterTable(items) {
+  if (!items.length) return '<p>Chưa phát hiện cụm trùng lặp/chồng chéo cần ưu tiên.</p>';
+
+  const rows = items.map((item) => `
+    <tr>
+      <td>${escapeHtml(item.cluster_id)}</td>
+      <td>${escapeHtml(item.topic_hint)}</td>
+      <td>${escapeHtml(item.url_count)}</td>
+      <td><span class="badge">${escapeHtml(item.risk)}</span></td>
+      <td>${escapeHtml(item.server_reason)}</td>
+    </tr>
+  `).join('');
+
+  return `<table>
+    <thead><tr><th>Cluster</th><th>Chủ đề gợi ý</th><th>Số URL</th><th>Rủi ro</th><th>Lý do</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function buildQuickComment(summary, clusterSummary) {
   if (summary.total === 0) return 'Chưa có URL nào được kiểm tra.';
+  if ((clusterSummary?.high || 0) > 0) return 'Website có cụm nội dung rủi ro cao, nên review khả năng trùng lặp/cannibalization trước.';
   if (summary.high_risk > 0) return 'Website có URL rủi ro cao, nên xử lý nhóm này trước.';
+  if ((clusterSummary?.medium || 0) > 0) return 'Website có cụm nội dung chồng chéo, nên rà soát để tránh phân tán tín hiệu SEO.';
   if (summary.weak > 0) return 'Website có URL yếu, nên ưu tiên tối ưu nội dung và metadata.';
   if (summary.needs_review > 0) return 'Website có URL cần rà soát, nên cải thiện dần theo action plan.';
   return 'Các URL đang ở trạng thái tương đối tốt theo rule-based scoring hiện tại.';

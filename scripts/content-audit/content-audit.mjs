@@ -7,6 +7,7 @@ import { fetchSitemapUrls } from './lib/fetch-sitemap.mjs';
 import { fetchUrlList } from './lib/fetch-url-list.mjs';
 import { extractPageFromHtml } from './lib/extract-page.mjs';
 import { scorePages } from './lib/score-rules.mjs';
+import { clusterPages } from './lib/cluster-pages.mjs';
 import { writeJsonReport } from './lib/report-json.mjs';
 import {
   actionPlanColumns,
@@ -36,8 +37,10 @@ async function main() {
   }
 
   const ruleFindings = scorePages(inventory);
+  const clusters = clusterPages(inventory, ruleFindings);
   const generatedAt = new Date().toISOString();
   const summary = summarizeFindings(ruleFindings);
+  const clusterSummary = summarizeClusters(clusters);
 
   const inventoryOutput = {
     tool: 'content-audit-pro',
@@ -62,18 +65,32 @@ async function main() {
     findings: ruleFindings
   };
 
+  const clustersOutput = {
+    tool: 'content-audit-pro',
+    version: '0.1.0',
+    primary_language: 'vi',
+    generated_at: generatedAt,
+    source: options.source,
+    input_url: options.url,
+    summary: clusterSummary,
+    clusters
+  };
+
   const reportContext = {
     generatedAt,
     inputUrl: options.url,
     source: options.source,
     summary,
+    clusterSummary,
     inventory,
-    findings: ruleFindings
+    findings: ruleFindings,
+    clusters
   };
 
   const paths = {
     inventoryJson: path.join(options.outDir, 'inventory.json'),
     findingsJson: path.join(options.outDir, 'rule_findings.json'),
+    clustersJson: path.join(options.outDir, 'clusters.json'),
     inventoryCsv: path.join(options.outDir, 'inventory.csv'),
     actionPlanCsv: path.join(options.outDir, 'content_action_plan.csv'),
     markdown: path.join(options.outDir, 'content_audit_report.md'),
@@ -82,15 +99,17 @@ async function main() {
 
   await writeJsonReport(paths.inventoryJson, inventoryOutput);
   await writeJsonReport(paths.findingsJson, findingsOutput);
+  await writeJsonReport(paths.clustersJson, clustersOutput);
   await writeCsvReport(paths.inventoryCsv, buildInventoryRows(inventory), inventoryColumns);
   await writeCsvReport(paths.actionPlanCsv, buildActionPlanRows(ruleFindings), actionPlanColumns);
   await writeMarkdownReport(paths.markdown, reportContext);
   await writeHtmlReport(paths.html, reportContext);
 
-  printSummary(summary);
+  printSummary(summary, clusterSummary);
   console.log('Hoàn tất kiểm tra website.');
   console.log(`Đã xuất inventory JSON tại: ${paths.inventoryJson}`);
   console.log(`Đã xuất kết quả chấm điểm tại: ${paths.findingsJson}`);
+  console.log(`Đã xuất cụm trùng lặp/chồng chéo tại: ${paths.clustersJson}`);
   console.log(`Đã xuất inventory CSV tại: ${paths.inventoryCsv}`);
   console.log(`Đã xuất action plan CSV tại: ${paths.actionPlanCsv}`);
   console.log(`Đã xuất báo cáo Markdown tại: ${paths.markdown}`);
@@ -145,7 +164,16 @@ function summarizeFindings(findings) {
   return summary;
 }
 
-function printSummary(summary) {
+function summarizeClusters(clusters) {
+  return {
+    total: clusters.length,
+    high: clusters.filter((item) => item.risk === 'high').length,
+    medium: clusters.filter((item) => item.risk === 'medium').length,
+    low: clusters.filter((item) => item.risk === 'low').length
+  };
+}
+
+function printSummary(summary, clusterSummary) {
   console.log('Tóm tắt chấm điểm nội dung:');
   console.log(`- Tổng URL: ${summary.total}`);
   console.log(`- Điểm trung bình: ${summary.average_score}/100`);
@@ -153,6 +181,11 @@ function printSummary(summary) {
   console.log(`- Cần rà soát: ${summary.needs_review}`);
   console.log(`- Yếu: ${summary.weak}`);
   console.log(`- Rủi ro cao: ${summary.high_risk}`);
+  console.log('Tóm tắt cụm trùng lặp/chồng chéo:');
+  console.log(`- Tổng cụm: ${clusterSummary.total}`);
+  console.log(`- Rủi ro cao: ${clusterSummary.high}`);
+  console.log(`- Trung bình: ${clusterSummary.medium}`);
+  console.log(`- Thấp: ${clusterSummary.low}`);
 }
 
 function failedPage(url, error, fetchMs) {

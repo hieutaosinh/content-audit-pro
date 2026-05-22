@@ -58,9 +58,19 @@ Note: `.gitignore` was attempted but the connector blocked the file creation. Ad
 - [x] Markdown and HTML reports now include delta summary
 - [x] CLI now prints Vietnamese cache/delta summary at the end
 
+### Phase 7 - LLM Needed Policy
+
+- [x] Added LLM selection policy: `scripts/content-audit/lib/llm-policy.mjs`
+- [x] CLI now builds page and cluster candidates that deserve AI review
+- [x] CLI now generates `llm_candidates.json`
+- [x] CLI now prints Vietnamese LLM candidate summary at the end
+- [x] Markdown report now includes LLM candidate summary
+- [x] HTML report now includes LLM candidate summary
+- [x] README now documents the LLM candidate output and safety scope
+
 ## Current MVP Status
 
-The project can now run a basic inventory, scoring, report, cluster, and re-audit comparison:
+The project can now run a basic inventory, scoring, report, cluster, re-audit comparison, and LLM-needed candidate selection:
 
 ```bash
 npm install
@@ -77,6 +87,7 @@ Expected outputs:
 audits/content/example-test/inventory.json
 audits/content/example-test/rule_findings.json
 audits/content/example-test/clusters.json
+audits/content/example-test/llm_candidates.json
 audits/content/example-test/cache_summary.json
 audits/content/example-test/inventory.csv
 audits/content/example-test/content_action_plan.csv
@@ -98,26 +109,48 @@ audits/content/example-test/content_audit_report.html
 - `persistent_issues`
 - sample URL lists for review
 
+## Current LLM Candidate Output
+
+`llm_candidates.json` includes:
+
+- `summary.total`
+- `summary.high_priority`
+- `summary.medium_priority`
+- `summary.page_candidates`
+- `summary.cluster_candidates`
+- `candidates[]` with type, priority, reason, prompt contract, review goal, flags/URLs, and cache key
+
+This phase only selects what should be reviewed by AI. It does not call an LLM and does not mutate website content.
+
 ## Known Limitations
 
 - Cache uses current placeholder `content_hash`; stronger hash should be added later
 - Cluster logic is still lightweight and deterministic
-- No LLM policy/client yet
+- LLM policy is deterministic and conservative; it may need tuning after real audits
+- No LLM client yet
 - WordPress REST source is not implemented yet
 - Internal/external link extraction is currently a placeholder
 - `.gitignore` still needs to be added
 
 ## Next Phase
 
-Phase 7 - LLM Needed Policy
+Phase 8 - LLM Client And Prompt Contracts
 
 Planned files:
 
-- `scripts/content-audit/lib/llm-policy.mjs`
+- `scripts/content-audit/lib/llm-client.mjs`
+- `scripts/content-audit/prompts/content-cluster-review.v1.md`
+- `scripts/content-audit/prompts/page-quality-review.v1.md`
 - update `scripts/content-audit/content-audit.mjs`
-- update reports with LLM candidate summary
 
 Planned outputs:
 
-- `llm_candidates.json`
-- report section for pages/clusters that deserve LLM review
+- `llm_decisions.json`
+
+Planned safeguards:
+
+- LLM returns JSON only
+- Every LLM call is logged
+- Every LLM result is cached
+- LLM output is advisory only
+- No direct WordPress mutation

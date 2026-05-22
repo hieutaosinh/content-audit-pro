@@ -8,6 +8,7 @@ import { fetchUrlList } from './lib/fetch-url-list.mjs';
 import { extractPageFromHtml } from './lib/extract-page.mjs';
 import { scorePages } from './lib/score-rules.mjs';
 import { clusterPages } from './lib/cluster-pages.mjs';
+import { buildLlmCandidates } from './lib/llm-policy.mjs';
 import { buildAuditSnapshot, compareAuditSnapshots, getCachePaths, readPreviousAudit, writeCurrentAudit } from './lib/cache.mjs';
 import { writeJsonReport } from './lib/report-json.mjs';
 import { actionPlanColumns, buildActionPlanRows, buildInventoryRows, inventoryColumns, writeCsvReport } from './lib/report-csv.mjs';
@@ -30,24 +31,26 @@ async function main() {
 
   const findings = scorePages(inventory);
   const clusters = clusterPages(inventory, findings);
+  const llmCandidates = buildLlmCandidates({ inventory, findings, clusters });
   const generatedAt = new Date().toISOString();
   const summary = summarizeFindings(findings);
   const clusterSummary = summarizeClusters(clusters);
   const cacheSummary = await handleCache(options, { generatedAt, inventory, findings, clusters });
 
-  const reportContext = { generatedAt, inputUrl: options.url, source: options.source, summary, clusterSummary, cacheSummary, inventory, findings, clusters };
+  const reportContext = { generatedAt, inputUrl: options.url, source: options.source, summary, clusterSummary, cacheSummary, llmCandidateSummary: llmCandidates.summary, inventory, findings, clusters };
   const paths = buildOutputPaths(options.outDir);
 
   await writeJsonReport(paths.inventoryJson, { ...baseOutput(options, generatedAt, urls.length), inventory });
   await writeJsonReport(paths.findingsJson, { ...baseOutput(options, generatedAt, urls.length), summary, findings });
   await writeJsonReport(paths.clustersJson, { ...baseOutput(options, generatedAt, urls.length), summary: clusterSummary, clusters });
+  await writeJsonReport(paths.llmCandidatesJson, { ...baseOutput(options, generatedAt, urls.length), summary: llmCandidates.summary, candidates: llmCandidates.candidates });
   await writeJsonReport(paths.cacheSummaryJson, cacheSummary);
   await writeCsvReport(paths.inventoryCsv, buildInventoryRows(inventory), inventoryColumns);
   await writeCsvReport(paths.actionPlanCsv, buildActionPlanRows(findings), actionPlanColumns);
   await writeMarkdownReport(paths.markdown, reportContext);
   await writeHtmlReport(paths.html, reportContext);
 
-  printSummary(summary, clusterSummary, cacheSummary);
+  printSummary(summary, clusterSummary, cacheSummary, llmCandidates.summary);
   printOutputPaths(paths);
 }
 
@@ -86,6 +89,7 @@ function buildOutputPaths(outDir) {
     inventoryJson: path.join(outDir, 'inventory.json'),
     findingsJson: path.join(outDir, 'rule_findings.json'),
     clustersJson: path.join(outDir, 'clusters.json'),
+    llmCandidatesJson: path.join(outDir, 'llm_candidates.json'),
     cacheSummaryJson: path.join(outDir, 'cache_summary.json'),
     inventoryCsv: path.join(outDir, 'inventory.csv'),
     actionPlanCsv: path.join(outDir, 'content_action_plan.csv'),
@@ -110,7 +114,7 @@ function summarizeClusters(clusters) {
   return { total: clusters.length, high: clusters.filter((item) => item.risk === 'high').length, medium: clusters.filter((item) => item.risk === 'medium').length, low: clusters.filter((item) => item.risk === 'low').length };
 }
 
-function printSummary(summary, clusterSummary, cacheSummary) {
+function printSummary(summary, clusterSummary, cacheSummary, llmCandidateSummary) {
   console.log('Tóm tắt chấm điểm nội dung:');
   console.log(`- Tổng URL: ${summary.total}`);
   console.log(`- Điểm trung bình: ${summary.average_score}/100`);
@@ -120,6 +124,11 @@ function printSummary(summary, clusterSummary, cacheSummary) {
   console.log(`- Rủi ro cao: ${summary.high_risk}`);
   console.log('Tóm tắt cụm trùng lặp/chồng chéo:');
   console.log(`- Tổng cụm: ${clusterSummary.total}`);
+  console.log('Tóm tắt ứng viên cần AI review:');
+  console.log(`- Tổng ứng viên: ${llmCandidateSummary.total}`);
+  console.log(`- Ưu tiên cao: ${llmCandidateSummary.high_priority}`);
+  console.log(`- Page candidates: ${llmCandidateSummary.page_candidates}`);
+  console.log(`- Cluster candidates: ${llmCandidateSummary.cluster_candidates}`);
   if (cacheSummary.enabled) {
     const d = cacheSummary.delta;
     console.log('Tóm tắt so sánh với lần audit trước:');
@@ -138,6 +147,7 @@ function printOutputPaths(paths) {
   console.log(`Đã xuất inventory JSON tại: ${paths.inventoryJson}`);
   console.log(`Đã xuất kết quả chấm điểm tại: ${paths.findingsJson}`);
   console.log(`Đã xuất cụm trùng lặp/chồng chéo tại: ${paths.clustersJson}`);
+  console.log(`Đã xuất ứng viên cần AI review tại: ${paths.llmCandidatesJson}`);
   console.log(`Đã xuất tóm tắt cache/delta tại: ${paths.cacheSummaryJson}`);
   console.log(`Đã xuất báo cáo HTML tại: ${paths.html}`);
 }

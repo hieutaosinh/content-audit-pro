@@ -6,7 +6,7 @@ export async function writeHtmlReport(filePath, report) {
 }
 
 export function buildHtmlReport(report) {
-  const { generatedAt, inputUrl, source, summary, clusterSummary, cacheSummary, findings, clusters = [] } = report;
+  const { generatedAt, inputUrl, source, summary, clusterSummary, cacheSummary, llmCandidateSummary, findings, clusters = [] } = report;
   const priorityItems = findings.filter((item) => ['high_risk', 'weak', 'needs_review'].includes(item.severity)).slice(0, 30);
   const priorityClusters = clusters.filter((item) => ['high', 'medium'].includes(item.risk)).slice(0, 20);
 
@@ -37,7 +37,7 @@ export function buildHtmlReport(report) {
     <section class="card">
       <h1>Báo cáo Content Audit</h1>
       <p class="small">Nguồn kiểm tra: ${escapeHtml(inputUrl)} | Loại nguồn: ${escapeHtml(source)} | Tạo lúc: ${escapeHtml(generatedAt)}</p>
-      <p>${escapeHtml(buildQuickComment(summary, clusterSummary, cacheSummary))}</p>
+      <p>${escapeHtml(buildQuickComment(summary, clusterSummary, cacheSummary, llmCandidateSummary))}</p>
     </section>
 
     <section class="card"><h2>Tóm tắt điểm</h2><div class="grid">
@@ -48,15 +48,18 @@ export function buildHtmlReport(report) {
       ${metric('Yếu', summary.weak)}
       ${metric('Rủi ro cao', summary.high_risk)}
       ${metric('Cụm chồng chéo', clusterSummary?.total ?? 0)}
+      ${metric('Cần AI review', llmCandidateSummary?.total ?? 0)}
     </div></section>
 
     <section class="card"><h2>So sánh với lần audit trước</h2>${buildDeltaHtml(cacheSummary)}</section>
+    <section class="card"><h2>Ứng viên cần AI review</h2>${buildLlmCandidateHtml(llmCandidateSummary)}</section>
     <section class="card"><h2>URL cần ưu tiên</h2>${buildPriorityTable(priorityItems)}</section>
     <section class="card"><h2>Cụm trùng lặp/chồng chéo</h2>${buildClusterTable(priorityClusters)}</section>
     <section class="card"><h2>Gợi ý xử lý</h2><ul>
       <li>Ưu tiên URL rủi ro cao và vấn đề còn tồn tại qua nhiều lần audit.</li>
       <li>Với trang yếu, kiểm tra title, meta description, H1/H2, độ dài nội dung và internal link.</li>
       <li>Với cụm trùng lặp/chồng chéo, chưa tự merge/redirect; cần review thủ công để chọn bài trụ cột.</li>
+      <li>Chỉ gửi các URL/cụm trong <code>llm_candidates.json</code> sang AI để tiết kiệm token.</li>
       <li>Tool hiện chỉ audit và xuất khuyến nghị, không tự sửa website.</li>
     </ul></section>
   </main>
@@ -84,6 +87,17 @@ function buildDeltaHtml(cacheSummary) {
   </div>`;
 }
 
+function buildLlmCandidateHtml(summary) {
+  if (!summary || summary.total === 0) return '<p>Chưa có URL hoặc cụm nào đủ điều kiện dùng AI review trong lần kiểm tra này.</p>';
+  return `<div class="grid">
+    ${metric('Tổng ứng viên', summary.total)}
+    ${metric('Ưu tiên cao', summary.high_priority)}
+    ${metric('Ưu tiên trung bình', summary.medium_priority)}
+    ${metric('Page candidates', summary.page_candidates)}
+    ${metric('Cluster candidates', summary.cluster_candidates)}
+  </div><p class="small">Chi tiết nằm trong file <code>llm_candidates.json</code>. Đây là danh sách nên gửi sang AI ở phase sau, thay vì gửi toàn bộ website.</p>`;
+}
+
 function buildPriorityTable(items) {
   if (!items.length) return '<p>Chưa có URL cần ưu tiên trong lần kiểm tra này.</p>';
   const rows = items.map((item) => `<tr><td><a href="${escapeAttr(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.url)}</a></td><td>${escapeHtml(item.server_score)}</td><td><span class="badge">${escapeHtml(item.severity_vi)}</span></td><td>${escapeHtml((item.notes_vi || []).slice(0, 3).join('; '))}</td></tr>`).join('');
@@ -96,8 +110,9 @@ function buildClusterTable(items) {
   return `<table><thead><tr><th>Cluster</th><th>Chủ đề gợi ý</th><th>Số URL</th><th>Rủi ro</th><th>Lý do</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-function buildQuickComment(summary, clusterSummary, cacheSummary) {
+function buildQuickComment(summary, clusterSummary, cacheSummary, llmCandidateSummary) {
   if (cacheSummary?.delta?.persistent_issues > 0) return 'Website còn vấn đề lặp lại qua nhiều lần audit, nên ưu tiên xử lý nhóm này.';
+  if ((llmCandidateSummary?.high_priority || 0) > 0) return 'Có ứng viên ưu tiên cao cần AI review, nên xử lý nhóm này trước khi tạo kế hoạch content sâu hơn.';
   if (summary.total === 0) return 'Chưa có URL nào được kiểm tra.';
   if ((clusterSummary?.high || 0) > 0) return 'Website có cụm nội dung rủi ro cao, nên review khả năng trùng lặp/cannibalization trước.';
   if (summary.high_risk > 0) return 'Website có URL rủi ro cao, nên xử lý nhóm này trước.';

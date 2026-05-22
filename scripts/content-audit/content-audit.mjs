@@ -6,6 +6,7 @@ import { parseArgs } from './lib/cli-args.mjs';
 import { fetchSitemapUrls } from './lib/fetch-sitemap.mjs';
 import { fetchUrlList } from './lib/fetch-url-list.mjs';
 import { extractPageFromHtml } from './lib/extract-page.mjs';
+import { scorePages } from './lib/score-rules.mjs';
 
 async function main() {
   const options = parseArgs();
@@ -24,7 +25,9 @@ async function main() {
     inventory.push(await fetchAndExtract(url));
   }
 
-  const output = {
+  const ruleFindings = scorePages(inventory);
+
+  const inventoryOutput = {
     tool: 'content-audit-pro',
     version: '0.1.0',
     primary_language: 'vi',
@@ -35,11 +38,28 @@ async function main() {
     inventory
   };
 
-  const outputPath = path.join(options.outDir, 'inventory.json');
-  await writeFile(outputPath, `${JSON.stringify(output, null, 2)}\n`, 'utf8');
+  const findingsOutput = {
+    tool: 'content-audit-pro',
+    version: '0.1.0',
+    primary_language: 'vi',
+    generated_at: new Date().toISOString(),
+    source: options.source,
+    input_url: options.url,
+    total_urls: urls.length,
+    summary: summarizeFindings(ruleFindings),
+    findings: ruleFindings
+  };
 
+  const inventoryPath = path.join(options.outDir, 'inventory.json');
+  const findingsPath = path.join(options.outDir, 'rule_findings.json');
+
+  await writeFile(inventoryPath, `${JSON.stringify(inventoryOutput, null, 2)}\n`, 'utf8');
+  await writeFile(findingsPath, `${JSON.stringify(findingsOutput, null, 2)}\n`, 'utf8');
+
+  printSummary(findingsOutput.summary);
   console.log('Hoàn tất kiểm tra website.');
-  console.log(`Đã xuất báo cáo inventory tại: ${outputPath}`);
+  console.log(`Đã xuất inventory tại: ${inventoryPath}`);
+  console.log(`Đã xuất kết quả chấm điểm tại: ${findingsPath}`);
 }
 
 async function collectUrls(options) {
@@ -66,6 +86,38 @@ async function fetchAndExtract(url) {
   } catch (error) {
     return failedPage(url, error, Date.now() - startedAt);
   }
+}
+
+function summarizeFindings(findings) {
+  const summary = {
+    total: findings.length,
+    average_score: 0,
+    healthy: 0,
+    needs_review: 0,
+    weak: 0,
+    high_risk: 0
+  };
+
+  if (!findings.length) return summary;
+
+  const totalScore = findings.reduce((sum, item) => sum + item.server_score, 0);
+  summary.average_score = Math.round(totalScore / findings.length);
+
+  for (const item of findings) {
+    if (summary[item.severity] !== undefined) summary[item.severity] += 1;
+  }
+
+  return summary;
+}
+
+function printSummary(summary) {
+  console.log('Tóm tắt chấm điểm nội dung:');
+  console.log(`- Tổng URL: ${summary.total}`);
+  console.log(`- Điểm trung bình: ${summary.average_score}/100`);
+  console.log(`- Tốt: ${summary.healthy}`);
+  console.log(`- Cần rà soát: ${summary.needs_review}`);
+  console.log(`- Yếu: ${summary.weak}`);
+  console.log(`- Rủi ro cao: ${summary.high_risk}`);
 }
 
 function failedPage(url, error, fetchMs) {

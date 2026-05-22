@@ -1,0 +1,94 @@
+#!/usr/bin/env node
+
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { parseArgs } from './lib/cli-args.mjs';
+import { fetchSitemapUrls } from './lib/fetch-sitemap.mjs';
+import { fetchUrlList } from './lib/fetch-url-list.mjs';
+import { extractPageFromHtml } from './lib/extract-page.mjs';
+
+async function main() {
+  const options = parseArgs();
+  await mkdir(options.outDir, { recursive: true });
+
+  const urls = await collectUrls(options);
+  const inventory = [];
+
+  for (const url of urls) {
+    console.log(`Fetching ${url}`);
+    inventory.push(await fetchAndExtract(url));
+  }
+
+  const output = {
+    tool: 'content-audit-pro',
+    version: '0.1.0',
+    generated_at: new Date().toISOString(),
+    source: options.source,
+    input_url: options.url,
+    total_urls: urls.length,
+    inventory
+  };
+
+  const outputPath = path.join(options.outDir, 'inventory.json');
+  await writeFile(outputPath, `${JSON.stringify(output, null, 2)}\n`, 'utf8');
+
+  console.log(`Done. Wrote ${outputPath}`);
+}
+
+async function collectUrls(options) {
+  if (options.source === 'sitemap') {
+    return fetchSitemapUrls(options.url, { limit: options.limit });
+  }
+
+  if (options.source === 'urls') {
+    if (!options.urlsPath) throw new Error('Missing --urls <path> for --source urls');
+    return fetchUrlList(options.urlsPath, { limit: options.limit });
+  }
+
+  throw new Error('WordPress source is planned for a later phase. Use --source sitemap or --source urls for now.');
+}
+
+async function fetchAndExtract(url) {
+  const startedAt = Date.now();
+
+  try {
+    const response = await fetch(url);
+    const html = await response.text();
+    const page = extractPageFromHtml(url, html, response.status);
+    return { ...page, fetch_ms: Date.now() - startedAt };
+  } catch (error) {
+    return failedPage(url, error, Date.now() - startedAt);
+  }
+}
+
+function failedPage(url, error, fetchMs) {
+  return {
+    url,
+    status: null,
+    ok: false,
+    canonical: null,
+    title: '',
+    meta_description: '',
+    h1: [],
+    h2: [],
+    h3: [],
+    word_count: 0,
+    internal_links: [],
+    external_links: [],
+    images_total: 0,
+    images_missing_alt: 0,
+    published_at: null,
+    modified_at: null,
+    category: null,
+    tags: [],
+    content_hash: '',
+    fetched_at: new Date().toISOString(),
+    fetch_ms: fetchMs,
+    error: error.message
+  };
+}
+
+main().catch((error) => {
+  console.error(error.message);
+  process.exitCode = 1;
+});

@@ -1,10 +1,24 @@
 # Content Audit Pro
 
-CLI-first content audit tool for SEO and content cleanup workflows.
+CLI-first content audit tool for SEO and content cleanup workflows, ưu tiên kiểm tra website tiếng Việt.
 
 Current version: `0.1.0`.
 
 The first MVP focuses on collecting URLs, fetching pages, extracting basic content/SEO fields, and generating `inventory.json`.
+
+## Language Direction
+
+Tên file, tên module, tên field JSON và cấu trúc code dùng tiếng Anh để dễ bảo trì.
+
+Thông báo CLI, báo cáo cuối, ghi chú hành động và các phần hướng dẫn cho người dùng cuối sẽ ưu tiên tiếng Việt.
+
+Tool được thiết kế trước hết cho website tiếng Việt, nên các phase sau cần chú ý:
+
+- Đếm từ phù hợp với tiếng Việt
+- Nhận diện bài mỏng theo ngữ cảnh tiếng Việt
+- Flag lỗi title/meta bằng tiếng Việt dễ hiểu
+- Báo cáo HTML/Markdown bằng tiếng Việt
+- Action plan bằng tiếng Việt cho SEO/content team
 
 ## Safety Scope
 
@@ -65,6 +79,18 @@ Each page currently includes:
 - content hash placeholder
 - fetch timestamp
 - error field
+
+## Current CLI Messages
+
+Terminal messages are now Vietnamese-first, for example:
+
+```txt
+Bắt đầu kiểm tra nội dung website...
+Tìm thấy 20 URL cần kiểm tra.
+Đang kiểm tra: https://example.com/post/
+Hoàn tất kiểm tra website.
+Đã xuất báo cáo inventory tại: audits/content/example-test/inventory.json
+```
 
 ## Roadmap
 

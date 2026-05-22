@@ -8,14 +8,9 @@ import { fetchUrlList } from './lib/fetch-url-list.mjs';
 import { extractPageFromHtml } from './lib/extract-page.mjs';
 import { scorePages } from './lib/score-rules.mjs';
 import { clusterPages } from './lib/cluster-pages.mjs';
+import { buildAuditSnapshot, compareAuditSnapshots, getCachePaths, readPreviousAudit, writeCurrentAudit } from './lib/cache.mjs';
 import { writeJsonReport } from './lib/report-json.mjs';
-import {
-  actionPlanColumns,
-  buildActionPlanRows,
-  buildInventoryRows,
-  inventoryColumns,
-  writeCsvReport
-} from './lib/report-csv.mjs';
+import { actionPlanColumns, buildActionPlanRows, buildInventoryRows, inventoryColumns, writeCsvReport } from './lib/report-csv.mjs';
 import { writeMarkdownReport } from './lib/report-md.mjs';
 import { writeHtmlReport } from './lib/report-html.mjs';
 
@@ -24,11 +19,8 @@ async function main() {
   await mkdir(options.outDir, { recursive: true });
 
   console.log('Bắt đầu kiểm tra nội dung website...');
-  console.log(`Nguồn dữ liệu: ${options.source}`);
-
   const urls = await collectUrls(options);
   const inventory = [];
-
   console.log(`Tìm thấy ${urls.length} URL cần kiểm tra.`);
 
   for (const url of urls) {
@@ -36,144 +28,89 @@ async function main() {
     inventory.push(await fetchAndExtract(url));
   }
 
-  const ruleFindings = scorePages(inventory);
-  const clusters = clusterPages(inventory, ruleFindings);
+  const findings = scorePages(inventory);
+  const clusters = clusterPages(inventory, findings);
   const generatedAt = new Date().toISOString();
-  const summary = summarizeFindings(ruleFindings);
+  const summary = summarizeFindings(findings);
   const clusterSummary = summarizeClusters(clusters);
+  const cacheSummary = await handleCache(options, { generatedAt, inventory, findings, clusters });
 
-  const inventoryOutput = {
-    tool: 'content-audit-pro',
-    version: '0.1.0',
-    primary_language: 'vi',
-    generated_at: generatedAt,
-    source: options.source,
-    input_url: options.url,
-    total_urls: urls.length,
-    inventory
-  };
+  const reportContext = { generatedAt, inputUrl: options.url, source: options.source, summary, clusterSummary, cacheSummary, inventory, findings, clusters };
+  const paths = buildOutputPaths(options.outDir);
 
-  const findingsOutput = {
-    tool: 'content-audit-pro',
-    version: '0.1.0',
-    primary_language: 'vi',
-    generated_at: generatedAt,
-    source: options.source,
-    input_url: options.url,
-    total_urls: urls.length,
-    summary,
-    findings: ruleFindings
-  };
-
-  const clustersOutput = {
-    tool: 'content-audit-pro',
-    version: '0.1.0',
-    primary_language: 'vi',
-    generated_at: generatedAt,
-    source: options.source,
-    input_url: options.url,
-    summary: clusterSummary,
-    clusters
-  };
-
-  const reportContext = {
-    generatedAt,
-    inputUrl: options.url,
-    source: options.source,
-    summary,
-    clusterSummary,
-    inventory,
-    findings: ruleFindings,
-    clusters
-  };
-
-  const paths = {
-    inventoryJson: path.join(options.outDir, 'inventory.json'),
-    findingsJson: path.join(options.outDir, 'rule_findings.json'),
-    clustersJson: path.join(options.outDir, 'clusters.json'),
-    inventoryCsv: path.join(options.outDir, 'inventory.csv'),
-    actionPlanCsv: path.join(options.outDir, 'content_action_plan.csv'),
-    markdown: path.join(options.outDir, 'content_audit_report.md'),
-    html: path.join(options.outDir, 'content_audit_report.html')
-  };
-
-  await writeJsonReport(paths.inventoryJson, inventoryOutput);
-  await writeJsonReport(paths.findingsJson, findingsOutput);
-  await writeJsonReport(paths.clustersJson, clustersOutput);
+  await writeJsonReport(paths.inventoryJson, { ...baseOutput(options, generatedAt, urls.length), inventory });
+  await writeJsonReport(paths.findingsJson, { ...baseOutput(options, generatedAt, urls.length), summary, findings });
+  await writeJsonReport(paths.clustersJson, { ...baseOutput(options, generatedAt, urls.length), summary: clusterSummary, clusters });
+  await writeJsonReport(paths.cacheSummaryJson, cacheSummary);
   await writeCsvReport(paths.inventoryCsv, buildInventoryRows(inventory), inventoryColumns);
-  await writeCsvReport(paths.actionPlanCsv, buildActionPlanRows(ruleFindings), actionPlanColumns);
+  await writeCsvReport(paths.actionPlanCsv, buildActionPlanRows(findings), actionPlanColumns);
   await writeMarkdownReport(paths.markdown, reportContext);
   await writeHtmlReport(paths.html, reportContext);
 
-  printSummary(summary, clusterSummary);
-  console.log('Hoàn tất kiểm tra website.');
-  console.log(`Đã xuất inventory JSON tại: ${paths.inventoryJson}`);
-  console.log(`Đã xuất kết quả chấm điểm tại: ${paths.findingsJson}`);
-  console.log(`Đã xuất cụm trùng lặp/chồng chéo tại: ${paths.clustersJson}`);
-  console.log(`Đã xuất inventory CSV tại: ${paths.inventoryCsv}`);
-  console.log(`Đã xuất action plan CSV tại: ${paths.actionPlanCsv}`);
-  console.log(`Đã xuất báo cáo Markdown tại: ${paths.markdown}`);
-  console.log(`Đã xuất báo cáo HTML tại: ${paths.html}`);
+  printSummary(summary, clusterSummary, cacheSummary);
+  printOutputPaths(paths);
 }
 
 async function collectUrls(options) {
-  if (options.source === 'sitemap') {
-    return fetchSitemapUrls(options.url, { limit: options.limit });
-  }
-
+  if (options.source === 'sitemap') return fetchSitemapUrls(options.url, { limit: options.limit });
   if (options.source === 'urls') {
     if (!options.urlsPath) throw new Error('Thiếu --urls <path> khi dùng --source urls.');
     return fetchUrlList(options.urlsPath, { limit: options.limit });
   }
-
-  throw new Error('Nguồn WordPress sẽ được triển khai ở giai đoạn sau. Hiện tại hãy dùng --source sitemap hoặc --source urls.');
+  throw new Error('Nguồn WordPress sẽ được triển khai ở giai đoạn sau.');
 }
 
 async function fetchAndExtract(url) {
   const startedAt = Date.now();
-
   try {
     const response = await fetch(url);
     const html = await response.text();
-    const page = extractPageFromHtml(url, html, response.status);
-    return { ...page, fetch_ms: Date.now() - startedAt };
+    return { ...extractPageFromHtml(url, html, response.status), fetch_ms: Date.now() - startedAt };
   } catch (error) {
     return failedPage(url, error, Date.now() - startedAt);
   }
 }
 
-function summarizeFindings(findings) {
-  const summary = {
-    total: findings.length,
-    average_score: 0,
-    healthy: 0,
-    needs_review: 0,
-    weak: 0,
-    high_risk: 0
+async function handleCache(options, data) {
+  if (!options.cacheEnabled) return { enabled: false, cache_path: null, delta: null };
+  const cachePaths = getCachePaths(options.cacheDir, options.url);
+  const snapshot = buildAuditSnapshot({ inputUrl: options.url, ...data });
+  const previous = await readPreviousAudit(cachePaths);
+  const delta = compareAuditSnapshots(previous, snapshot);
+  await writeCurrentAudit(cachePaths, snapshot);
+  return { enabled: true, cache_path: cachePaths.lastAuditPath, site_key: cachePaths.siteKey, delta };
+}
+
+function buildOutputPaths(outDir) {
+  return {
+    inventoryJson: path.join(outDir, 'inventory.json'),
+    findingsJson: path.join(outDir, 'rule_findings.json'),
+    clustersJson: path.join(outDir, 'clusters.json'),
+    cacheSummaryJson: path.join(outDir, 'cache_summary.json'),
+    inventoryCsv: path.join(outDir, 'inventory.csv'),
+    actionPlanCsv: path.join(outDir, 'content_action_plan.csv'),
+    markdown: path.join(outDir, 'content_audit_report.md'),
+    html: path.join(outDir, 'content_audit_report.html')
   };
+}
 
+function baseOutput(options, generatedAt, totalUrls) {
+  return { tool: 'content-audit-pro', version: '0.1.0', primary_language: 'vi', generated_at: generatedAt, source: options.source, input_url: options.url, total_urls: totalUrls };
+}
+
+function summarizeFindings(findings) {
+  const summary = { total: findings.length, average_score: 0, healthy: 0, needs_review: 0, weak: 0, high_risk: 0 };
   if (!findings.length) return summary;
-
-  const totalScore = findings.reduce((sum, item) => sum + item.server_score, 0);
-  summary.average_score = Math.round(totalScore / findings.length);
-
-  for (const item of findings) {
-    if (summary[item.severity] !== undefined) summary[item.severity] += 1;
-  }
-
+  summary.average_score = Math.round(findings.reduce((sum, item) => sum + item.server_score, 0) / findings.length);
+  for (const item of findings) if (summary[item.severity] !== undefined) summary[item.severity] += 1;
   return summary;
 }
 
 function summarizeClusters(clusters) {
-  return {
-    total: clusters.length,
-    high: clusters.filter((item) => item.risk === 'high').length,
-    medium: clusters.filter((item) => item.risk === 'medium').length,
-    low: clusters.filter((item) => item.risk === 'low').length
-  };
+  return { total: clusters.length, high: clusters.filter((item) => item.risk === 'high').length, medium: clusters.filter((item) => item.risk === 'medium').length, low: clusters.filter((item) => item.risk === 'low').length };
 }
 
-function printSummary(summary, clusterSummary) {
+function printSummary(summary, clusterSummary, cacheSummary) {
   console.log('Tóm tắt chấm điểm nội dung:');
   console.log(`- Tổng URL: ${summary.total}`);
   console.log(`- Điểm trung bình: ${summary.average_score}/100`);
@@ -183,36 +120,30 @@ function printSummary(summary, clusterSummary) {
   console.log(`- Rủi ro cao: ${summary.high_risk}`);
   console.log('Tóm tắt cụm trùng lặp/chồng chéo:');
   console.log(`- Tổng cụm: ${clusterSummary.total}`);
-  console.log(`- Rủi ro cao: ${clusterSummary.high}`);
-  console.log(`- Trung bình: ${clusterSummary.medium}`);
-  console.log(`- Thấp: ${clusterSummary.low}`);
+  if (cacheSummary.enabled) {
+    const d = cacheSummary.delta;
+    console.log('Tóm tắt so sánh với lần audit trước:');
+    console.log(`- Có cache trước đó: ${d.had_previous_cache ? 'Có' : 'Không'}`);
+    console.log(`- URL mới: ${d.new_urls}`);
+    console.log(`- URL thay đổi: ${d.changed_urls}`);
+    console.log(`- URL không đổi: ${d.unchanged_urls}`);
+    console.log(`- Vấn đề mới: ${d.new_issues}`);
+    console.log(`- Vấn đề đã xử lý: ${d.fixed_issues}`);
+    console.log(`- Vấn đề còn tồn tại: ${d.persistent_issues}`);
+  }
+}
+
+function printOutputPaths(paths) {
+  console.log('Hoàn tất kiểm tra website.');
+  console.log(`Đã xuất inventory JSON tại: ${paths.inventoryJson}`);
+  console.log(`Đã xuất kết quả chấm điểm tại: ${paths.findingsJson}`);
+  console.log(`Đã xuất cụm trùng lặp/chồng chéo tại: ${paths.clustersJson}`);
+  console.log(`Đã xuất tóm tắt cache/delta tại: ${paths.cacheSummaryJson}`);
+  console.log(`Đã xuất báo cáo HTML tại: ${paths.html}`);
 }
 
 function failedPage(url, error, fetchMs) {
-  return {
-    url,
-    status: null,
-    ok: false,
-    canonical: null,
-    title: '',
-    meta_description: '',
-    h1: [],
-    h2: [],
-    h3: [],
-    word_count: 0,
-    internal_links: [],
-    external_links: [],
-    images_total: 0,
-    images_missing_alt: 0,
-    published_at: null,
-    modified_at: null,
-    category: null,
-    tags: [],
-    content_hash: '',
-    fetched_at: new Date().toISOString(),
-    fetch_ms: fetchMs,
-    error: error.message
-  };
+  return { url, status: null, ok: false, canonical: null, title: '', meta_description: '', h1: [], h2: [], h3: [], word_count: 0, internal_links: [], external_links: [], images_total: 0, images_missing_alt: 0, published_at: null, modified_at: null, category: null, tags: [], content_hash: '', fetched_at: new Date().toISOString(), fetch_ms: fetchMs, error: error.message };
 }
 
 main().catch((error) => {

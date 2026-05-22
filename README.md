@@ -4,7 +4,7 @@ CLI-first content audit tool for SEO and content cleanup workflows, ưu tiên ki
 
 Current version: `0.1.0`.
 
-The current MVP collects URLs, fetches pages, extracts basic content/SEO fields, scores each URL with rule-based checks, and generates JSON, CSV, Markdown, and HTML reports.
+The current MVP collects URLs, fetches pages, extracts basic content/SEO fields, scores each URL with rule-based checks, detects basic duplicate/overlap clusters, and generates JSON, CSV, Markdown, and HTML reports.
 
 ## Language Direction
 
@@ -64,6 +64,7 @@ npm run audit -- \
 ```txt
 inventory.json
 rule_findings.json
+clusters.json
 inventory.csv
 content_action_plan.csv
 content_audit_report.md
@@ -93,6 +94,14 @@ content_audit_report.html
 - `server_flags`
 - `notes_vi`
 - `score_sections`
+
+`clusters.json` includes basic duplicate/overlap groups:
+
+- duplicate title
+- duplicate meta description
+- similar slug
+- similar H1
+- simple Vietnamese keyword overlap
 
 `content_action_plan.csv` includes practical next actions for SEO/content review.
 
@@ -137,9 +146,15 @@ Tóm tắt chấm điểm nội dung:
 - Cần rà soát: 10
 - Yếu: 4
 - Rủi ro cao: 1
+Tóm tắt cụm trùng lặp/chồng chéo:
+- Tổng cụm: 3
+- Rủi ro cao: 0
+- Trung bình: 2
+- Thấp: 1
 Hoàn tất kiểm tra website.
 Đã xuất inventory JSON tại: audits/content/example-test/inventory.json
 Đã xuất kết quả chấm điểm tại: audits/content/example-test/rule_findings.json
+Đã xuất cụm trùng lặp/chồng chéo tại: audits/content/example-test/clusters.json
 Đã xuất inventory CSV tại: audits/content/example-test/inventory.csv
 Đã xuất action plan CSV tại: audits/content/example-test/content_action_plan.csv
 Đã xuất báo cáo Markdown tại: audits/content/example-test/content_audit_report.md

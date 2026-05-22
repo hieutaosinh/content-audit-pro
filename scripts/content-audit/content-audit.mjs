@@ -11,17 +11,23 @@ async function main() {
   const options = parseArgs();
   await mkdir(options.outDir, { recursive: true });
 
+  console.log('Bắt đầu kiểm tra nội dung website...');
+  console.log(`Nguồn dữ liệu: ${options.source}`);
+
   const urls = await collectUrls(options);
   const inventory = [];
 
+  console.log(`Tìm thấy ${urls.length} URL cần kiểm tra.`);
+
   for (const url of urls) {
-    console.log(`Fetching ${url}`);
+    console.log(`Đang kiểm tra: ${url}`);
     inventory.push(await fetchAndExtract(url));
   }
 
   const output = {
     tool: 'content-audit-pro',
     version: '0.1.0',
+    primary_language: 'vi',
     generated_at: new Date().toISOString(),
     source: options.source,
     input_url: options.url,
@@ -32,7 +38,8 @@ async function main() {
   const outputPath = path.join(options.outDir, 'inventory.json');
   await writeFile(outputPath, `${JSON.stringify(output, null, 2)}\n`, 'utf8');
 
-  console.log(`Done. Wrote ${outputPath}`);
+  console.log('Hoàn tất kiểm tra website.');
+  console.log(`Đã xuất báo cáo inventory tại: ${outputPath}`);
 }
 
 async function collectUrls(options) {
@@ -41,11 +48,11 @@ async function collectUrls(options) {
   }
 
   if (options.source === 'urls') {
-    if (!options.urlsPath) throw new Error('Missing --urls <path> for --source urls');
+    if (!options.urlsPath) throw new Error('Thiếu --urls <path> khi dùng --source urls.');
     return fetchUrlList(options.urlsPath, { limit: options.limit });
   }
 
-  throw new Error('WordPress source is planned for a later phase. Use --source sitemap or --source urls for now.');
+  throw new Error('Nguồn WordPress sẽ được triển khai ở giai đoạn sau. Hiện tại hãy dùng --source sitemap hoặc --source urls.');
 }
 
 async function fetchAndExtract(url) {
@@ -89,6 +96,6 @@ function failedPage(url, error, fetchMs) {
 }
 
 main().catch((error) => {
-  console.error(error.message);
+  console.error(`Lỗi khi kiểm tra website: ${error.message}`);
   process.exitCode = 1;
 });

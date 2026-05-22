@@ -49,9 +49,18 @@ Note: `.gitignore` was attempted but the connector blocked the file creation. Ad
 - [x] HTML report now includes duplicate/overlap cluster section
 - [x] CLI now prints Vietnamese cluster summary at the end
 
+### Phase 6 - Cache And Re-Audit
+
+- [x] Added cache helper: `scripts/content-audit/lib/cache.mjs`
+- [x] Added `--cache-dir` and `--no-cache` CLI options
+- [x] CLI now writes and reads audit cache snapshots
+- [x] CLI now generates `cache_summary.json`
+- [x] Markdown and HTML reports now include delta summary
+- [x] CLI now prints Vietnamese cache/delta summary at the end
+
 ## Current MVP Status
 
-The project can now run a basic inventory, scoring, report, and cluster audit:
+The project can now run a basic inventory, scoring, report, cluster, and re-audit comparison:
 
 ```bash
 npm install
@@ -68,64 +77,47 @@ Expected outputs:
 audits/content/example-test/inventory.json
 audits/content/example-test/rule_findings.json
 audits/content/example-test/clusters.json
+audits/content/example-test/cache_summary.json
 audits/content/example-test/inventory.csv
 audits/content/example-test/content_action_plan.csv
 audits/content/example-test/content_audit_report.md
 audits/content/example-test/content_audit_report.html
 ```
 
-## Current Scoring Output
+## Current Cache Output
 
-Each URL in `rule_findings.json` includes:
+`cache_summary.json` includes:
 
-- `server_score`
-- `severity`
-- `severity_vi`
-- `server_flags`
-- `notes_vi`
-- `score_sections`
-
-## Current Cluster Output
-
-Each cluster in `clusters.json` includes:
-
-- `cluster_id`
-- `type`
-- `topic_hint`
-- `urls`
-- `risk`
-- `server_reason`
-- `url_count`
-- `cluster_hash`
-
-Cluster detection currently checks:
-
-- duplicate title
-- duplicate meta description
-- similar slug
-- similar H1
-- simple Vietnamese keyword overlap
+- `had_previous_cache`
+- `new_urls`
+- `changed_urls`
+- `unchanged_urls`
+- `removed_urls`
+- `new_issues`
+- `fixed_issues`
+- `persistent_issues`
+- sample URL lists for review
 
 ## Known Limitations
 
+- Cache uses current placeholder `content_hash`; stronger hash should be added later
 - Cluster logic is still lightweight and deterministic
 - No LLM policy/client yet
 - WordPress REST source is not implemented yet
 - Internal/external link extraction is currently a placeholder
-- Content hash is currently a simple placeholder based on body text length
 - `.gitignore` still needs to be added
 
 ## Next Phase
 
-Phase 6 - Cache And Re-Audit
+Phase 7 - LLM Needed Policy
 
 Planned files:
 
-- `scripts/content-audit/lib/cache.mjs`
+- `scripts/content-audit/lib/llm-policy.mjs`
 - update `scripts/content-audit/content-audit.mjs`
-- update reports with delta summary
+- update reports with LLM candidate summary
 
 Planned outputs:
 
-- cache folder for page fingerprints
-- delta report for new, changed, unchanged, and persistent issues
+- `llm_candidates.json`
+- report section for pages/clusters that deserve LLM review

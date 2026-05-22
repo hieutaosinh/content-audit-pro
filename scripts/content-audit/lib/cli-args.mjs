@@ -12,6 +12,8 @@ export function parseArgs(argv = process.argv) {
     .option('--limit <number>', 'Maximum number of URLs to audit', parsePositiveInt, 50)
     .option('--out <path>', 'Output folder', 'audits/content/latest')
     .option('--format <formats>', 'Comma-separated output formats', 'json')
+    .option('--cache-dir <path>', 'Cache root folder for re-audit comparison', '.cache/content-audit')
+    .option('--no-cache', 'Disable cache read/write and delta comparison')
     .option('--timeout-ms <number>', 'Fetch timeout in milliseconds', parsePositiveInt, 15000)
     .option('--user-agent <value>', 'User agent used when fetching pages', 'ContentAuditPro/0.1 (+https://github.com/hieutaosinh/content-audit-pro)');
 
@@ -30,6 +32,8 @@ export function parseArgs(argv = process.argv) {
     limit: options.limit,
     outDir: options.out,
     formats: String(options.format || 'json').split(',').map((item) => item.trim()).filter(Boolean),
+    cacheEnabled: options.cache !== false,
+    cacheDir: options.cacheDir,
     timeoutMs: options.timeoutMs,
     userAgent: options.userAgent
   };

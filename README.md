@@ -4,7 +4,7 @@ CLI-first content audit tool for SEO and content cleanup workflows, ưu tiên ki
 
 Current version: `0.1.0`.
 
-The current MVP collects URLs, fetches pages, extracts basic content/SEO fields, scores each URL with rule-based checks, detects basic duplicate/overlap clusters, and generates JSON, CSV, Markdown, and HTML reports.
+The current MVP collects URLs, fetches pages, extracts basic content/SEO fields, scores each URL with rule-based checks, detects basic duplicate/overlap clusters, compares with the previous audit cache, and generates JSON, CSV, Markdown, and HTML reports.
 
 ## Language Direction
 
@@ -59,41 +59,46 @@ npm run audit -- \
   --out audits/content/url-list-test
 ```
 
+## Cache Options
+
+Cache is enabled by default and stored under:
+
+```txt
+.cache/content-audit/<site>/last-audit.json
+```
+
+Use a custom cache folder:
+
+```bash
+npm run audit -- \
+  --url https://example.com/sitemap.xml \
+  --source sitemap \
+  --cache-dir .cache/content-audit \
+  --out audits/content/example-test
+```
+
+Disable cache:
+
+```bash
+npm run audit -- \
+  --url https://example.com/sitemap.xml \
+  --source sitemap \
+  --no-cache \
+  --out audits/content/example-test
+```
+
 ## Current Outputs
 
 ```txt
 inventory.json
 rule_findings.json
 clusters.json
+cache_summary.json
 inventory.csv
 content_action_plan.csv
 content_audit_report.md
 content_audit_report.html
 ```
-
-`inventory.json` includes extracted page data:
-
-- URL
-- HTTP status
-- canonical
-- title
-- meta description
-- H1/H2/H3
-- word count
-- image count
-- missing alt count
-- content hash placeholder
-- fetch timestamp
-- error field
-
-`rule_findings.json` includes rule-based scoring:
-
-- `server_score`
-- `severity`
-- `severity_vi`
-- `server_flags`
-- `notes_vi`
-- `score_sections`
 
 `clusters.json` includes basic duplicate/overlap groups:
 
@@ -102,6 +107,16 @@ content_audit_report.html
 - similar slug
 - similar H1
 - simple Vietnamese keyword overlap
+
+`cache_summary.json` includes re-audit comparison:
+
+- new URLs
+- changed URLs
+- unchanged URLs
+- removed URLs
+- new issues
+- fixed issues
+- persistent issues
 
 `content_action_plan.csv` includes practical next actions for SEO/content review.
 
@@ -133,32 +148,17 @@ Severity bands:
 
 ## Current CLI Messages
 
-Terminal messages are Vietnamese-first, for example:
+Terminal messages are Vietnamese-first and now include cache/delta summary:
 
 ```txt
-Bắt đầu kiểm tra nội dung website...
-Tìm thấy 20 URL cần kiểm tra.
-Đang kiểm tra: https://example.com/post/
-Tóm tắt chấm điểm nội dung:
-- Tổng URL: 20
-- Điểm trung bình: 72/100
-- Tốt: 5
-- Cần rà soát: 10
-- Yếu: 4
-- Rủi ro cao: 1
-Tóm tắt cụm trùng lặp/chồng chéo:
-- Tổng cụm: 3
-- Rủi ro cao: 0
-- Trung bình: 2
-- Thấp: 1
-Hoàn tất kiểm tra website.
-Đã xuất inventory JSON tại: audits/content/example-test/inventory.json
-Đã xuất kết quả chấm điểm tại: audits/content/example-test/rule_findings.json
-Đã xuất cụm trùng lặp/chồng chéo tại: audits/content/example-test/clusters.json
-Đã xuất inventory CSV tại: audits/content/example-test/inventory.csv
-Đã xuất action plan CSV tại: audits/content/example-test/content_action_plan.csv
-Đã xuất báo cáo Markdown tại: audits/content/example-test/content_audit_report.md
-Đã xuất báo cáo HTML tại: audits/content/example-test/content_audit_report.html
+Tóm tắt so sánh với lần audit trước:
+- Có cache trước đó: Có
+- URL mới: 2
+- URL thay đổi: 5
+- URL không đổi: 13
+- Vấn đề mới: 1
+- Vấn đề đã xử lý: 3
+- Vấn đề còn tồn tại: 4
 ```
 
 ## Roadmap

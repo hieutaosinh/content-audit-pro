@@ -6,7 +6,7 @@ export async function writeMarkdownReport(filePath, report) {
 }
 
 export function buildMarkdownReport(report) {
-  const { generatedAt, inputUrl, source, summary, clusterSummary, findings, clusters = [] } = report;
+  const { generatedAt, inputUrl, source, summary, clusterSummary, cacheSummary, findings, clusters = [] } = report;
   const highRisk = findings.filter((item) => item.severity === 'high_risk');
   const weak = findings.filter((item) => item.severity === 'weak');
   const needsReview = findings.filter((item) => item.severity === 'needs_review');
@@ -30,7 +30,11 @@ export function buildMarkdownReport(report) {
 
 ## Nhận định nhanh
 
-${buildQuickComment(summary, clusterSummary)}
+${buildQuickComment(summary, clusterSummary, cacheSummary)}
+
+## So sánh với lần audit trước
+
+${buildDeltaSection(cacheSummary)}
 
 ## URL cần ưu tiên xử lý
 
@@ -53,7 +57,8 @@ Báo cáo này chỉ đưa ra khuyến nghị. Tool chưa tự động sửa Wor
 `;
 }
 
-function buildQuickComment(summary, clusterSummary) {
+function buildQuickComment(summary, clusterSummary, cacheSummary) {
+  if (cacheSummary?.delta?.persistent_issues > 0) return 'Website còn một số vấn đề lặp lại qua nhiều lần audit, nên ưu tiên xử lý nhóm này.';
   if (summary.total === 0) return 'Chưa có URL nào được kiểm tra.';
   if ((clusterSummary?.high || 0) > 0) return 'Website có cụm nội dung rủi ro cao, nên review khả năng trùng lặp/cannibalization trước.';
   if (summary.high_risk > 0) return 'Website có một số URL rủi ro cao, nên xử lý nhóm này trước.';
@@ -61,6 +66,22 @@ function buildQuickComment(summary, clusterSummary) {
   if (summary.weak > 0) return 'Website có nhiều URL yếu, nên ưu tiên tối ưu nội dung và metadata.';
   if (summary.needs_review > 0) return 'Phần lớn URL ở mức cần rà soát, nên cải thiện dần theo action plan.';
   return 'Các URL đang ở trạng thái tương đối tốt theo rule-based scoring hiện tại.';
+}
+
+function buildDeltaSection(cacheSummary) {
+  if (!cacheSummary?.enabled) return 'Cache đang tắt, chưa có dữ liệu so sánh.';
+  const delta = cacheSummary.delta;
+  if (!delta?.had_previous_cache) return 'Đây là lần audit đầu tiên có cache, lần chạy sau sẽ có dữ liệu so sánh.';
+
+  return [
+    `- URL mới: ${delta.new_urls}`,
+    `- URL thay đổi nội dung: ${delta.changed_urls}`,
+    `- URL không đổi: ${delta.unchanged_urls}`,
+    `- URL không còn trong lần audit này: ${delta.removed_urls}`,
+    `- Vấn đề mới: ${delta.new_issues}`,
+    `- Vấn đề đã xử lý: ${delta.fixed_issues}`,
+    `- Vấn đề còn tồn tại: ${delta.persistent_issues}`
+  ].join('\n');
 }
 
 function buildIssueTable(items) {

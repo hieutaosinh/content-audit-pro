@@ -33,9 +33,17 @@ Note: `.gitignore` was attempted but the connector blocked the file creation. Ad
 - [x] CLI now generates `rule_findings.json`
 - [x] CLI now prints a Vietnamese scoring summary at the end
 
+### Phase 4 - Reports
+
+- [x] Added JSON report writer: `scripts/content-audit/lib/report-json.mjs`
+- [x] Added CSV report builders: `scripts/content-audit/lib/report-csv.mjs`
+- [x] Added Vietnamese Markdown report: `scripts/content-audit/lib/report-md.mjs`
+- [x] Added Vietnamese HTML report: `scripts/content-audit/lib/report-html.mjs`
+- [x] CLI now generates inventory CSV, action plan CSV, Markdown report, and HTML report
+
 ## Current MVP Status
 
-The project can now run a basic inventory and scoring audit:
+The project can now run a basic inventory, scoring, and report audit:
 
 ```bash
 npm install
@@ -51,6 +59,10 @@ Expected outputs:
 ```txt
 audits/content/example-test/inventory.json
 audits/content/example-test/rule_findings.json
+audits/content/example-test/inventory.csv
+audits/content/example-test/content_action_plan.csv
+audits/content/example-test/content_audit_report.md
+audits/content/example-test/content_audit_report.html
 ```
 
 ## Current Scoring Output
@@ -76,9 +88,15 @@ Tóm tắt chấm điểm nội dung:
 - Rủi ro cao: 1
 ```
 
+## Current Report Output
+
+- `inventory.csv`: bảng dữ liệu page đã extract
+- `content_action_plan.csv`: action plan cho SEO/content review
+- `content_audit_report.md`: báo cáo Markdown tiếng Việt
+- `content_audit_report.html`: báo cáo HTML tiếng Việt có thể mở bằng browser
+
 ## Known Limitations
 
-- No CSV/Markdown/HTML reports yet
 - No duplicate/cluster detection yet beyond duplicate title/meta scoring
 - No LLM policy/client yet
 - WordPress REST source is not implemented yet
@@ -88,18 +106,16 @@ Tóm tắt chấm điểm nội dung:
 
 ## Next Phase
 
-Phase 4 - Reports
+Phase 5 - Duplicate And Cluster Detection
 
 Planned files:
 
-- `scripts/content-audit/lib/report-json.mjs`
-- `scripts/content-audit/lib/report-csv.mjs`
-- `scripts/content-audit/lib/report-md.mjs`
-- `scripts/content-audit/lib/report-html.mjs`
+- `scripts/content-audit/lib/cluster-pages.mjs`
+- update `scripts/content-audit/lib/report-md.mjs`
+- update `scripts/content-audit/lib/report-html.mjs`
+- update `scripts/content-audit/content-audit.mjs`
 
 Planned outputs:
 
-- `inventory.csv`
-- `content_action_plan.csv`
-- `content_audit_report.md`
-- `content_audit_report.html`
+- `clusters.json`
+- cluster section in Markdown/HTML reports

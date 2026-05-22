@@ -1,12 +1,22 @@
 #!/usr/bin/env node
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from './lib/cli-args.mjs';
 import { fetchSitemapUrls } from './lib/fetch-sitemap.mjs';
 import { fetchUrlList } from './lib/fetch-url-list.mjs';
 import { extractPageFromHtml } from './lib/extract-page.mjs';
 import { scorePages } from './lib/score-rules.mjs';
+import { writeJsonReport } from './lib/report-json.mjs';
+import {
+  actionPlanColumns,
+  buildActionPlanRows,
+  buildInventoryRows,
+  inventoryColumns,
+  writeCsvReport
+} from './lib/report-csv.mjs';
+import { writeMarkdownReport } from './lib/report-md.mjs';
+import { writeHtmlReport } from './lib/report-html.mjs';
 
 async function main() {
   const options = parseArgs();
@@ -26,12 +36,14 @@ async function main() {
   }
 
   const ruleFindings = scorePages(inventory);
+  const generatedAt = new Date().toISOString();
+  const summary = summarizeFindings(ruleFindings);
 
   const inventoryOutput = {
     tool: 'content-audit-pro',
     version: '0.1.0',
     primary_language: 'vi',
-    generated_at: new Date().toISOString(),
+    generated_at: generatedAt,
     source: options.source,
     input_url: options.url,
     total_urls: urls.length,
@@ -42,24 +54,47 @@ async function main() {
     tool: 'content-audit-pro',
     version: '0.1.0',
     primary_language: 'vi',
-    generated_at: new Date().toISOString(),
+    generated_at: generatedAt,
     source: options.source,
     input_url: options.url,
     total_urls: urls.length,
-    summary: summarizeFindings(ruleFindings),
+    summary,
     findings: ruleFindings
   };
 
-  const inventoryPath = path.join(options.outDir, 'inventory.json');
-  const findingsPath = path.join(options.outDir, 'rule_findings.json');
+  const reportContext = {
+    generatedAt,
+    inputUrl: options.url,
+    source: options.source,
+    summary,
+    inventory,
+    findings: ruleFindings
+  };
 
-  await writeFile(inventoryPath, `${JSON.stringify(inventoryOutput, null, 2)}\n`, 'utf8');
-  await writeFile(findingsPath, `${JSON.stringify(findingsOutput, null, 2)}\n`, 'utf8');
+  const paths = {
+    inventoryJson: path.join(options.outDir, 'inventory.json'),
+    findingsJson: path.join(options.outDir, 'rule_findings.json'),
+    inventoryCsv: path.join(options.outDir, 'inventory.csv'),
+    actionPlanCsv: path.join(options.outDir, 'content_action_plan.csv'),
+    markdown: path.join(options.outDir, 'content_audit_report.md'),
+    html: path.join(options.outDir, 'content_audit_report.html')
+  };
 
-  printSummary(findingsOutput.summary);
+  await writeJsonReport(paths.inventoryJson, inventoryOutput);
+  await writeJsonReport(paths.findingsJson, findingsOutput);
+  await writeCsvReport(paths.inventoryCsv, buildInventoryRows(inventory), inventoryColumns);
+  await writeCsvReport(paths.actionPlanCsv, buildActionPlanRows(ruleFindings), actionPlanColumns);
+  await writeMarkdownReport(paths.markdown, reportContext);
+  await writeHtmlReport(paths.html, reportContext);
+
+  printSummary(summary);
   console.log('Hoàn tất kiểm tra website.');
-  console.log(`Đã xuất inventory tại: ${inventoryPath}`);
-  console.log(`Đã xuất kết quả chấm điểm tại: ${findingsPath}`);
+  console.log(`Đã xuất inventory JSON tại: ${paths.inventoryJson}`);
+  console.log(`Đã xuất kết quả chấm điểm tại: ${paths.findingsJson}`);
+  console.log(`Đã xuất inventory CSV tại: ${paths.inventoryCsv}`);
+  console.log(`Đã xuất action plan CSV tại: ${paths.actionPlanCsv}`);
+  console.log(`Đã xuất báo cáo Markdown tại: ${paths.markdown}`);
+  console.log(`Đã xuất báo cáo HTML tại: ${paths.html}`);
 }
 
 async function collectUrls(options) {

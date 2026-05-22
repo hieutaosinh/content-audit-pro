@@ -6,7 +6,7 @@ export async function writeHtmlReport(filePath, report) {
 }
 
 export function buildHtmlReport(report) {
-  const { generatedAt, inputUrl, source, summary, clusterSummary, cacheSummary, llmCandidateSummary, findings, clusters = [] } = report;
+  const { generatedAt, inputUrl, source, summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary, findings, clusters = [] } = report;
   const priorityItems = findings.filter((item) => ['high_risk', 'weak', 'needs_review'].includes(item.severity)).slice(0, 30);
   const priorityClusters = clusters.filter((item) => ['high', 'medium'].includes(item.risk)).slice(0, 20);
 
@@ -37,7 +37,7 @@ export function buildHtmlReport(report) {
     <section class="card">
       <h1>Báo cáo Content Audit</h1>
       <p class="small">Nguồn kiểm tra: ${escapeHtml(inputUrl)} | Loại nguồn: ${escapeHtml(source)} | Tạo lúc: ${escapeHtml(generatedAt)}</p>
-      <p>${escapeHtml(buildQuickComment(summary, clusterSummary, cacheSummary, llmCandidateSummary))}</p>
+      <p>${escapeHtml(buildQuickComment(summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary))}</p>
     </section>
 
     <section class="card"><h2>Tóm tắt điểm</h2><div class="grid">
@@ -49,10 +49,12 @@ export function buildHtmlReport(report) {
       ${metric('Rủi ro cao', summary.high_risk)}
       ${metric('Cụm chồng chéo', clusterSummary?.total ?? 0)}
       ${metric('Cần AI review', llmCandidateSummary?.total ?? 0)}
+      ${metric('AI decisions', llmDecisionSummary?.total ?? 0)}
     </div></section>
 
     <section class="card"><h2>So sánh với lần audit trước</h2>${buildDeltaHtml(cacheSummary)}</section>
     <section class="card"><h2>Ứng viên cần AI review</h2>${buildLlmCandidateHtml(llmCandidateSummary)}</section>
+    <section class="card"><h2>Kết quả AI review</h2>${buildLlmDecisionHtml(llmDecisionSummary)}</section>
     <section class="card"><h2>URL cần ưu tiên</h2>${buildPriorityTable(priorityItems)}</section>
     <section class="card"><h2>Cụm trùng lặp/chồng chéo</h2>${buildClusterTable(priorityClusters)}</section>
     <section class="card"><h2>Gợi ý xử lý</h2><ul>
@@ -60,6 +62,7 @@ export function buildHtmlReport(report) {
       <li>Với trang yếu, kiểm tra title, meta description, H1/H2, độ dài nội dung và internal link.</li>
       <li>Với cụm trùng lặp/chồng chéo, chưa tự merge/redirect; cần review thủ công để chọn bài trụ cột.</li>
       <li>Chỉ gửi các URL/cụm trong <code>llm_candidates.json</code> sang AI để tiết kiệm token.</li>
+      <li>Nếu đã bật <code>--use-llm</code>, xem <code>llm_decisions.json</code>; mọi quyết định AI đều là advisory-only.</li>
       <li>Tool hiện chỉ audit và xuất khuyến nghị, không tự sửa website.</li>
     </ul></section>
   </main>
@@ -95,7 +98,18 @@ function buildLlmCandidateHtml(summary) {
     ${metric('Ưu tiên trung bình', summary.medium_priority)}
     ${metric('Page candidates', summary.page_candidates)}
     ${metric('Cluster candidates', summary.cluster_candidates)}
-  </div><p class="small">Chi tiết nằm trong file <code>llm_candidates.json</code>. Đây là danh sách nên gửi sang AI ở phase sau, thay vì gửi toàn bộ website.</p>`;
+  </div><p class="small">Chi tiết nằm trong file <code>llm_candidates.json</code>. Đây là danh sách nên gửi sang AI, thay vì gửi toàn bộ website.</p>`;
+}
+
+function buildLlmDecisionHtml(summary) {
+  if (!summary || summary.total === 0) return '<p>Chưa có quyết định AI nào. Chạy thêm <code>--use-llm</code> và cấu hình <code>OPENAI_API_KEY</code> hoặc <code>LLM_API_KEY</code> nếu muốn tạo review.</p>';
+  return `<div class="grid">
+    ${metric('Tổng quyết định', summary.total)}
+    ${metric('Review thành công', summary.reviewed)}
+    ${metric('Lỗi', summary.failed)}
+    ${metric('Lấy từ cache', summary.from_cache)}
+    ${metric('Cần người duyệt', summary.requires_human_approval)}
+  </div><p class="small">Chi tiết nằm trong file <code>llm_decisions.json</code>. Đây là khuyến nghị advisory-only, không phải lệnh tự động áp dụng.</p>`;
 }
 
 function buildPriorityTable(items) {
@@ -110,7 +124,8 @@ function buildClusterTable(items) {
   return `<table><thead><tr><th>Cluster</th><th>Chủ đề gợi ý</th><th>Số URL</th><th>Rủi ro</th><th>Lý do</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-function buildQuickComment(summary, clusterSummary, cacheSummary, llmCandidateSummary) {
+function buildQuickComment(summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary) {
+  if ((llmDecisionSummary?.requires_human_approval || 0) > 0) return 'Đã có quyết định AI advisory-only cần người duyệt trước khi áp dụng.';
   if (cacheSummary?.delta?.persistent_issues > 0) return 'Website còn vấn đề lặp lại qua nhiều lần audit, nên ưu tiên xử lý nhóm này.';
   if ((llmCandidateSummary?.high_priority || 0) > 0) return 'Có ứng viên ưu tiên cao cần AI review, nên xử lý nhóm này trước khi tạo kế hoạch content sâu hơn.';
   if (summary.total === 0) return 'Chưa có URL nào được kiểm tra.';

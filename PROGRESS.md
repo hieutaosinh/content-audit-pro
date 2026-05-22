@@ -80,9 +80,20 @@ Note: `.gitignore` was attempted but the connector blocked the file creation. Ad
 - [x] HTML report now includes LLM decision summary
 - [x] README now documents LLM usage and safeguards
 
+### Phase 9 - WordPress REST API Read-Only
+
+- [x] Added read-only WordPress fetcher: `scripts/content-audit/lib/fetch-wordpress.mjs`
+- [x] CLI now supports `--source wp`
+- [x] CLI now collects public WordPress posts and pages without write actions
+- [x] Inventory JSON now includes WordPress metadata when available
+- [x] Inventory CSV now includes WordPress metadata columns
+- [x] Markdown report now includes source summary
+- [x] HTML report now includes source summary
+- [x] README now documents WordPress REST read-only usage
+
 ## Current MVP Status
 
-The project can now run a basic inventory, scoring, report, cluster, re-audit comparison, LLM-needed candidate selection, and optional advisory-only LLM review:
+The project can now run a basic inventory, scoring, report, cluster, re-audit comparison, LLM-needed candidate selection, optional advisory-only LLM review, and WordPress REST read-only source collection:
 
 ```bash
 npm install
@@ -91,6 +102,16 @@ npm run audit -- \
   --source sitemap \
   --limit 20 \
   --out audits/content/example-test
+```
+
+WordPress REST read-only source:
+
+```bash
+npm run audit -- \
+  --url https://example.com \
+  --source wp \
+  --limit 50 \
+  --out audits/content/wp-test
 ```
 
 Optional LLM review:
@@ -123,6 +144,22 @@ audits/content/example-test/content_action_plan.csv
 audits/content/example-test/content_audit_report.md
 audits/content/example-test/content_audit_report.html
 ```
+
+## Current WordPress REST Output
+
+When running with `--source wp`, `inventory.json` and `inventory.csv` include:
+
+- `source_type`
+- `wp_type`
+- `wp_id`
+- `wp_slug`
+- `wp_status`
+- `published_at`
+- `modified_at`
+- `category`
+- `tags`
+
+WordPress mode uses public GET requests only and does not authenticate or write to WordPress.
 
 ## Current Cache Output
 
@@ -181,28 +218,29 @@ Every decision remains advisory-only and requires human review before implementa
 - Cluster logic is still lightweight and deterministic
 - LLM policy is deterministic and conservative; it may need tuning after real audits
 - LLM client currently supports chat-completions style JSON responses
-- WordPress REST source is not implemented yet
+- WordPress REST source currently uses public unauthenticated reads only
 - Internal/external link extraction is currently a placeholder
 - `.gitignore` still needs to be added
 
 ## Next Phase
 
-Phase 9 - WordPress REST API Read-Only
+Phase 10 - Content Hash And Link Extraction Improvements
 
 Planned files:
 
-- `scripts/content-audit/lib/fetch-wordpress.mjs`
-- update `scripts/content-audit/content-audit.mjs`
-- update reports with WordPress source metadata
+- `scripts/content-audit/lib/content-hash.mjs`
+- update `scripts/content-audit/lib/extract-page.mjs`
+- update `scripts/content-audit/lib/fetch-wordpress.mjs`
 
 Planned outputs/improvements:
 
-- collect posts/pages from WordPress REST
-- get publish date, modified date, slug, status, category, tag, and content more reliably
-- keep the source read-only
+- stronger content hash for cache accuracy
+- extract internal links
+- extract external links
+- improve image/alt extraction for WordPress content
 
 Planned safeguards:
 
 - no WordPress write actions
 - no redirect/noindex/delete actions
-- authentication optional and read-only if added later
+- keep outputs deterministic before adding more automation

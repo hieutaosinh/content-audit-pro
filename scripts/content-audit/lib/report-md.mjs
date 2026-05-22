@@ -6,7 +6,7 @@ export async function writeMarkdownReport(filePath, report) {
 }
 
 export function buildMarkdownReport(report) {
-  const { generatedAt, inputUrl, source, summary, clusterSummary, cacheSummary, llmCandidateSummary, findings, clusters = [] } = report;
+  const { generatedAt, inputUrl, source, summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary, findings, clusters = [] } = report;
   const highRisk = findings.filter((item) => item.severity === 'high_risk');
   const weak = findings.filter((item) => item.severity === 'weak');
   const needsReview = findings.filter((item) => item.severity === 'needs_review');
@@ -28,10 +28,11 @@ export function buildMarkdownReport(report) {
 - Rủi ro cao: ${summary.high_risk}
 - Cụm trùng lặp/chồng chéo: ${clusterSummary?.total ?? 0}
 - Ứng viên cần AI review: ${llmCandidateSummary?.total ?? 0}
+- Quyết định AI đã tạo: ${llmDecisionSummary?.total ?? 0}
 
 ## Nhận định nhanh
 
-${buildQuickComment(summary, clusterSummary, cacheSummary, llmCandidateSummary)}
+${buildQuickComment(summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary)}
 
 ## So sánh với lần audit trước
 
@@ -40,6 +41,10 @@ ${buildDeltaSection(cacheSummary)}
 ## Ứng viên cần AI review
 
 ${buildLlmCandidateSection(llmCandidateSummary)}
+
+## Kết quả AI review
+
+${buildLlmDecisionSection(llmDecisionSummary)}
 
 ## URL cần ưu tiên xử lý
 
@@ -55,15 +60,17 @@ ${buildClusterTable(priorityClusters)}
 - Trang yếu: ưu tiên cập nhật title, meta description, H1/H2, bổ sung nội dung và internal link.
 - Cụm trùng lặp/chồng chéo: chưa tự merge/redirect; cần review thủ công để chọn bài trụ cột.
 - Chỉ gửi các URL/cụm có trong `llm_candidates.json` sang AI để tiết kiệm token.
+- Nếu đã bật `--use-llm`, xem `llm_decisions.json` để lấy khuyến nghị dạng advisory-only.
 - Trang tốt: giữ lại, chỉ cần theo dõi định kỳ.
 
 ## Lưu ý an toàn
 
-Báo cáo này chỉ đưa ra khuyến nghị. Tool chưa tự động sửa WordPress, chưa tạo redirect, chưa noindex và chưa xóa nội dung.
+Báo cáo này chỉ đưa ra khuyến nghị. Tool chưa tự động sửa WordPress, chưa tạo redirect, chưa noindex và chưa xóa nội dung. Mọi quyết định từ AI đều cần người duyệt trước khi áp dụng.
 `;
 }
 
-function buildQuickComment(summary, clusterSummary, cacheSummary, llmCandidateSummary) {
+function buildQuickComment(summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary) {
+  if ((llmDecisionSummary?.requires_human_approval || 0) > 0) return 'Đã có quyết định AI advisory-only cần người duyệt trước khi áp dụng.';
   if (cacheSummary?.delta?.persistent_issues > 0) return 'Website còn một số vấn đề lặp lại qua nhiều lần audit, nên ưu tiên xử lý nhóm này.';
   if ((llmCandidateSummary?.high_priority || 0) > 0) return 'Có ứng viên ưu tiên cao cần AI review, nên xử lý nhóm này trước khi tạo kế hoạch content sâu hơn.';
   if (summary.total === 0) return 'Chưa có URL nào được kiểm tra.';
@@ -101,7 +108,21 @@ function buildLlmCandidateSection(summary) {
     `- Page candidates: ${summary.page_candidates}`,
     `- Cluster candidates: ${summary.cluster_candidates}`,
     '',
-    'Chi tiết nằm trong file `llm_candidates.json`. Đây là danh sách nên gửi sang AI ở phase sau, thay vì gửi toàn bộ website.'
+    'Chi tiết nằm trong file `llm_candidates.json`. Đây là danh sách nên gửi sang AI, thay vì gửi toàn bộ website.'
+  ].join('\n');
+}
+
+function buildLlmDecisionSection(summary) {
+  if (!summary || summary.total === 0) return 'Chưa có quyết định AI nào. Chạy thêm `--use-llm` và cấu hình `OPENAI_API_KEY` hoặc `LLM_API_KEY` nếu muốn tạo `llm_decisions.json` có nội dung review.';
+
+  return [
+    `- Tổng quyết định: ${summary.total}`,
+    `- Review thành công: ${summary.reviewed}`,
+    `- Lỗi: ${summary.failed}`,
+    `- Lấy từ cache: ${summary.from_cache}`,
+    `- Cần người duyệt: ${summary.requires_human_approval}`,
+    '',
+    'Chi tiết nằm trong file `llm_decisions.json`. Đây là khuyến nghị advisory-only, không phải lệnh tự động áp dụng.'
   ].join('\n');
 }
 

@@ -4,7 +4,7 @@ CLI-first content audit tool for SEO and content cleanup workflows, ưu tiên ki
 
 Current version: `0.1.0`.
 
-The current MVP collects URLs, fetches pages, extracts basic content/SEO fields, scores each URL with rule-based checks, detects basic duplicate/overlap clusters, compares with the previous audit cache, and generates JSON, CSV, Markdown, and HTML reports.
+The current MVP collects URLs, fetches pages, extracts basic content/SEO fields, scores each URL with rule-based checks, detects basic duplicate/overlap clusters, compares with the previous audit cache, identifies pages/clusters that deserve LLM review, and generates JSON, CSV, Markdown, and HTML reports.
 
 ## Language Direction
 
@@ -31,6 +31,7 @@ The tool does not:
 - Push noindex rules
 - Delete posts/pages
 - Perform destructive actions automatically
+- Send pages to an LLM automatically
 
 ## Install
 
@@ -93,6 +94,7 @@ npm run audit -- \
 inventory.json
 rule_findings.json
 clusters.json
+llm_candidates.json
 cache_summary.json
 inventory.csv
 content_action_plan.csv
@@ -107,6 +109,17 @@ content_audit_report.html
 - similar slug
 - similar H1
 - simple Vietnamese keyword overlap
+
+`llm_candidates.json` includes a token-saving review queue:
+
+- page candidates that need semantic judgment
+- cluster candidates that need intent/cannibalization review
+- priority level
+- recommended prompt contract
+- review goal
+- cache key
+
+The tool only creates this candidate list. It does not call any LLM yet.
 
 `cache_summary.json` includes re-audit comparison:
 
@@ -146,11 +159,36 @@ Severity bands:
 0-39: high_risk / Rủi ro cao
 ```
 
+## LLM Needed Policy
+
+Phase 7 adds `scripts/content-audit/lib/llm-policy.mjs`.
+
+The policy sets `llm_needed = true` for cases such as:
+
+- duplicate/overlap clusters
+- thin or very thin content that needs topical-depth review
+- stale content that may need rewrite planning
+- pages with enough content but weak score
+- metadata duplication that needs intent comparison
+
+The policy avoids LLM usage for purely measurable or technical issues such as:
+
+- fetch errors
+- redirect status
+- missing title/meta/H1 when the fix is straightforward
+- image alt or taxonomy cleanup
+
 ## Current CLI Messages
 
-Terminal messages are Vietnamese-first and now include cache/delta summary:
+Terminal messages are Vietnamese-first and now include cache/delta and LLM candidate summaries:
 
 ```txt
+Tóm tắt ứng viên cần AI review:
+- Tổng ứng viên: 5
+- Ưu tiên cao: 1
+- Page candidates: 3
+- Cluster candidates: 2
+
 Tóm tắt so sánh với lần audit trước:
 - Có cache trước đó: Có
 - URL mới: 2

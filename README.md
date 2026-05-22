@@ -4,7 +4,7 @@ CLI-first content audit tool for SEO and content cleanup workflows, ưu tiên ki
 
 Current version: `0.1.0`.
 
-The first MVP focuses on collecting URLs, fetching pages, extracting basic content/SEO fields, and generating `inventory.json`.
+The current MVP collects URLs, fetches pages, extracts basic content/SEO fields, scores each URL with rule-based checks, and generates `inventory.json` plus `rule_findings.json`.
 
 ## Language Direction
 
@@ -63,9 +63,10 @@ npm run audit -- \
 
 ```txt
 inventory.json
+rule_findings.json
 ```
 
-Each page currently includes:
+`inventory.json` includes extracted page data:
 
 - URL
 - HTTP status
@@ -80,16 +81,57 @@ Each page currently includes:
 - fetch timestamp
 - error field
 
+`rule_findings.json` includes rule-based scoring:
+
+- `server_score`
+- `severity`
+- `severity_vi`
+- `server_flags`
+- `notes_vi`
+- `score_sections`
+
+## Scoring
+
+The current scoring system uses a 100-point rubric:
+
+```txt
+Metadata: 15
+Structure: 15
+Freshness: 10
+Thin content: 15
+Duplicate risk: 15
+Internal links: 10
+Taxonomy: 10
+Technical content risk: 10
+```
+
+Severity bands:
+
+```txt
+80-100: healthy / Tốt
+60-79: needs_review / Cần rà soát
+40-59: weak / Yếu
+0-39: high_risk / Rủi ro cao
+```
+
 ## Current CLI Messages
 
-Terminal messages are now Vietnamese-first, for example:
+Terminal messages are Vietnamese-first, for example:
 
 ```txt
 Bắt đầu kiểm tra nội dung website...
 Tìm thấy 20 URL cần kiểm tra.
 Đang kiểm tra: https://example.com/post/
+Tóm tắt chấm điểm nội dung:
+- Tổng URL: 20
+- Điểm trung bình: 72/100
+- Tốt: 5
+- Cần rà soát: 10
+- Yếu: 4
+- Rủi ro cao: 1
 Hoàn tất kiểm tra website.
-Đã xuất báo cáo inventory tại: audits/content/example-test/inventory.json
+Đã xuất inventory tại: audits/content/example-test/inventory.json
+Đã xuất kết quả chấm điểm tại: audits/content/example-test/rule_findings.json
 ```
 
 ## Roadmap

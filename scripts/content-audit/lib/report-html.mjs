@@ -6,7 +6,7 @@ export async function writeHtmlReport(filePath, report) {
 }
 
 export function buildHtmlReport(report) {
-  const { generatedAt, inputUrl, source, summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary, findings, clusters = [] } = report;
+  const { generatedAt, inputUrl, source, sourceSummary, summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary, findings, clusters = [] } = report;
   const priorityItems = findings.filter((item) => ['high_risk', 'weak', 'needs_review'].includes(item.severity)).slice(0, 30);
   const priorityClusters = clusters.filter((item) => ['high', 'medium'].includes(item.risk)).slice(0, 20);
 
@@ -40,6 +40,14 @@ export function buildHtmlReport(report) {
       <p>${escapeHtml(buildQuickComment(summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary))}</p>
     </section>
 
+    <section class="card"><h2>Tóm tắt nguồn dữ liệu</h2><div class="grid">
+      ${metric('Nguồn', sourceSummary?.source || source)}
+      ${metric('Tổng URL', sourceSummary?.total_urls ?? summary.total)}
+      ${sourceSummary?.source === 'wp' ? metric('WordPress mode', 'Read-only') : ''}
+      ${sourceSummary?.source === 'wp' ? metric('Posts', sourceSummary.wordpress_posts) : ''}
+      ${sourceSummary?.source === 'wp' ? metric('Pages', sourceSummary.wordpress_pages) : ''}
+    </div></section>
+
     <section class="card"><h2>Tóm tắt điểm</h2><div class="grid">
       ${metric('Tổng URL', summary.total)}
       ${metric('Điểm trung bình', `${summary.average_score}/100`)}
@@ -61,6 +69,7 @@ export function buildHtmlReport(report) {
       <li>Ưu tiên URL rủi ro cao và vấn đề còn tồn tại qua nhiều lần audit.</li>
       <li>Với trang yếu, kiểm tra title, meta description, H1/H2, độ dài nội dung và internal link.</li>
       <li>Với cụm trùng lặp/chồng chéo, chưa tự merge/redirect; cần review thủ công để chọn bài trụ cột.</li>
+      <li>Nếu dùng nguồn WordPress REST, kiểm tra thêm publish date, modified date, slug, category và tag trong <code>inventory.csv</code>.</li>
       <li>Chỉ gửi các URL/cụm trong <code>llm_candidates.json</code> sang AI để tiết kiệm token.</li>
       <li>Nếu đã bật <code>--use-llm</code>, xem <code>llm_decisions.json</code>; mọi quyết định AI đều là advisory-only.</li>
       <li>Tool hiện chỉ audit và xuất khuyến nghị, không tự sửa website.</li>

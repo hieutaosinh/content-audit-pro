@@ -1,0 +1,22 @@
+{
+  "name": "content-audit-pro",
+  "version": "0.1.0",
+  "description": "Modular CLI-first content audit tool for SEO/content cleanup reports.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "audit": "node scripts/content-audit/content-audit.mjs",
+    "audit:help": "node scripts/content-audit/content-audit.mjs --help",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "commander": "^12.1.0",
+    "fast-xml-parser": "^4.5.0",
+    "slugify": "^1.6.6"
+  },
+  "devDependencies": {}
+}

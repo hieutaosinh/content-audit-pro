@@ -4,7 +4,7 @@ CLI-first content audit tool for SEO and content cleanup workflows, ưu tiên ki
 
 Current version: `0.1.0`.
 
-The current MVP collects URLs, fetches pages, extracts basic content/SEO fields, scores each URL with rule-based checks, detects basic duplicate/overlap clusters, compares with the previous audit cache, identifies pages/clusters that deserve LLM review, optionally runs advisory-only LLM reviews, and generates JSON, CSV, Markdown, and HTML reports.
+The current MVP collects URLs from sitemap, URL list, or WordPress REST API, extracts basic content/SEO fields, scores each URL with rule-based checks, detects basic duplicate/overlap clusters, compares with the previous audit cache, identifies pages/clusters that deserve LLM review, optionally runs advisory-only LLM reviews, and generates JSON, CSV, Markdown, and HTML reports.
 
 ## Language Direction
 
@@ -33,7 +33,7 @@ The tool does not:
 - Perform destructive actions automatically
 - Send pages to an LLM unless `--use-llm` is explicitly enabled
 
-LLM output is advisory-only and always requires human judgment before applying content, redirect, merge, noindex, or deletion decisions.
+WordPress mode uses public REST API reads only. LLM output is advisory-only and always requires human judgment before applying content, redirect, merge, noindex, or deletion decisions.
 
 ## Install
 
@@ -61,6 +61,30 @@ npm run audit -- \
   --limit 20 \
   --out audits/content/url-list-test
 ```
+
+## Run With WordPress REST Read-Only
+
+Use this when the target site is WordPress and exposes `/wp-json/wp/v2/posts` and `/wp-json/wp/v2/pages` publicly:
+
+```bash
+npm run audit -- \
+  --url https://example.com \
+  --source wp \
+  --limit 50 \
+  --out audits/content/wp-test
+```
+
+WordPress mode collects posts and pages in read-only mode and adds WordPress metadata to `inventory.json` and `inventory.csv`, including:
+
+- `source_type`
+- `wp_type`
+- `wp_id`
+- `wp_slug`
+- `wp_status`
+- `published_at`
+- `modified_at`
+- `category`
+- `tags`
 
 ## Run With LLM Review
 
@@ -143,6 +167,8 @@ content_audit_report.md
 content_audit_report.html
 ```
 
+`inventory.json` and `inventory.csv` include basic URL inventory. In WordPress mode, they also include post/page metadata such as ID, slug, status, publish date, modified date, category, and tags.
+
 `clusters.json` includes basic duplicate/overlap groups:
 
 - duplicate title
@@ -210,6 +236,19 @@ Severity bands:
 0-39: high_risk / Rủi ro cao
 ```
 
+## WordPress REST Read-Only Source
+
+Phase 9 adds `scripts/content-audit/lib/fetch-wordpress.mjs`.
+
+The WordPress source:
+
+- reads `/wp-json/wp/v2/posts`
+- reads `/wp-json/wp/v2/pages`
+- uses public GET requests only
+- does not authenticate
+- does not create, update, delete, redirect, or noindex anything
+- extracts WordPress metadata for better freshness/taxonomy review
+
 ## LLM Needed Policy
 
 Phase 7 adds `scripts/content-audit/lib/llm-policy.mjs`.
@@ -248,9 +287,15 @@ Rules:
 
 ## Current CLI Messages
 
-Terminal messages are Vietnamese-first and now include cache/delta, LLM candidate, and LLM decision summaries:
+Terminal messages are Vietnamese-first and now include source, cache/delta, LLM candidate, and LLM decision summaries:
 
 ```txt
+Tóm tắt nguồn dữ liệu:
+- Nguồn: wp
+- WordPress REST: read-only
+- Posts: 40
+- Pages: 10
+
 Tóm tắt ứng viên cần AI review:
 - Tổng ứng viên: 5
 - Ưu tiên cao: 1

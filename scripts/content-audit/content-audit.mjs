@@ -5,6 +5,7 @@ import path from 'node:path';
 import { parseArgs } from './lib/cli-args.mjs';
 import { fetchSitemapUrls } from './lib/fetch-sitemap.mjs';
 import { fetchUrlList } from './lib/fetch-url-list.mjs';
+import { fetchWordPressContent } from './lib/fetch-wordpress.mjs';
 import { extractPageFromHtml } from './lib/extract-page.mjs';
 import { scorePages } from './lib/score-rules.mjs';
 import { clusterPages } from './lib/cluster-pages.mjs';
@@ -21,14 +22,9 @@ async function main() {
   await mkdir(options.outDir, { recursive: true });
 
   console.log('Bắt đầu kiểm tra nội dung website...');
-  const urls = await collectUrls(options);
-  const inventory = [];
+  const inventory = await collectInventory(options);
+  const urls = inventory.map((page) => page.url);
   console.log(`Tìm thấy ${urls.length} URL cần kiểm tra.`);
-
-  for (const url of urls) {
-    console.log(`Đang kiểm tra: ${url}`);
-    inventory.push(await fetchAndExtract(url));
-  }
 
   const findings = scorePages(inventory);
   const clusters = clusterPages(inventory, findings);
@@ -36,13 +32,14 @@ async function main() {
   const generatedAt = new Date().toISOString();
   const summary = summarizeFindings(findings);
   const clusterSummary = summarizeClusters(clusters);
+  const sourceSummary = summarizeSource(inventory, options);
   const cacheSummary = await handleCache(options, { generatedAt, inventory, findings, clusters });
   const paths = buildOutputPaths(options.outDir);
   const llmDecisions = await buildLlmDecisions({ candidatesResult: llmCandidates, inventory, findings, clusters, options, generatedAt, paths });
 
-  const reportContext = { generatedAt, inputUrl: options.url, source: options.source, summary, clusterSummary, cacheSummary, llmCandidateSummary: llmCandidates.summary, llmDecisionSummary: llmDecisions.summary, inventory, findings, clusters };
+  const reportContext = { generatedAt, inputUrl: options.url, source: options.source, sourceSummary, summary, clusterSummary, cacheSummary, llmCandidateSummary: llmCandidates.summary, llmDecisionSummary: llmDecisions.summary, inventory, findings, clusters };
 
-  await writeJsonReport(paths.inventoryJson, { ...baseOutput(options, generatedAt, urls.length), inventory });
+  await writeJsonReport(paths.inventoryJson, { ...baseOutput(options, generatedAt, urls.length), source_summary: sourceSummary, inventory });
   await writeJsonReport(paths.findingsJson, { ...baseOutput(options, generatedAt, urls.length), summary, findings });
   await writeJsonReport(paths.clustersJson, { ...baseOutput(options, generatedAt, urls.length), summary: clusterSummary, clusters });
   await writeJsonReport(paths.llmCandidatesJson, { ...baseOutput(options, generatedAt, urls.length), summary: llmCandidates.summary, candidates: llmCandidates.candidates });
@@ -53,8 +50,23 @@ async function main() {
   await writeMarkdownReport(paths.markdown, reportContext);
   await writeHtmlReport(paths.html, reportContext);
 
-  printSummary(summary, clusterSummary, cacheSummary, llmCandidates.summary, llmDecisions);
+  printSummary(summary, clusterSummary, cacheSummary, llmCandidates.summary, llmDecisions, sourceSummary);
   printOutputPaths(paths);
+}
+
+async function collectInventory(options) {
+  if (options.source === 'wp') {
+    console.log('Đang lấy dữ liệu WordPress REST API ở chế độ read-only...');
+    return fetchWordPressContent(options.url, { limit: options.limit, userAgent: options.userAgent });
+  }
+
+  const urls = await collectUrls(options);
+  const inventory = [];
+  for (const url of urls) {
+    console.log(`Đang kiểm tra: ${url}`);
+    inventory.push(await fetchAndExtract(url));
+  }
+  return inventory;
 }
 
 async function collectUrls(options) {
@@ -63,7 +75,7 @@ async function collectUrls(options) {
     if (!options.urlsPath) throw new Error('Thiếu --urls <path> khi dùng --source urls.');
     return fetchUrlList(options.urlsPath, { limit: options.limit });
   }
-  throw new Error('Nguồn WordPress sẽ được triển khai ở giai đoạn sau.');
+  throw new Error('Nguồn dữ liệu không được hỗ trợ. Dùng sitemap, urls hoặc wp.');
 }
 
 async function fetchAndExtract(url) {
@@ -119,7 +131,26 @@ function summarizeClusters(clusters) {
   return { total: clusters.length, high: clusters.filter((item) => item.risk === 'high').length, medium: clusters.filter((item) => item.risk === 'medium').length, low: clusters.filter((item) => item.risk === 'low').length };
 }
 
-function printSummary(summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisions) {
+function summarizeSource(inventory, options) {
+  const wpItems = inventory.filter((page) => page.source_type === 'wordpress_rest');
+  return {
+    source: options.source,
+    total_urls: inventory.length,
+    wordpress_rest_items: wpItems.length,
+    wordpress_posts: wpItems.filter((page) => page.wp_type === 'posts').length,
+    wordpress_pages: wpItems.filter((page) => page.wp_type === 'pages').length,
+    read_only: options.source === 'wp'
+  };
+}
+
+function printSummary(summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisions, sourceSummary) {
+  console.log('Tóm tắt nguồn dữ liệu:');
+  console.log(`- Nguồn: ${sourceSummary.source}`);
+  if (sourceSummary.source === 'wp') {
+    console.log('- WordPress REST: read-only');
+    console.log(`- Posts: ${sourceSummary.wordpress_posts}`);
+    console.log(`- Pages: ${sourceSummary.wordpress_pages}`);
+  }
   console.log('Tóm tắt chấm điểm nội dung:');
   console.log(`- Tổng URL: ${summary.total}`);
   console.log(`- Điểm trung bình: ${summary.average_score}/100`);

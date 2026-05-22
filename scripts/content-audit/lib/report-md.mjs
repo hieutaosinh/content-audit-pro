@@ -6,7 +6,7 @@ export async function writeMarkdownReport(filePath, report) {
 }
 
 export function buildMarkdownReport(report) {
-  const { generatedAt, inputUrl, source, summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary, findings, clusters = [] } = report;
+  const { generatedAt, inputUrl, source, sourceSummary, summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary, findings, clusters = [] } = report;
   const highRisk = findings.filter((item) => item.severity === 'high_risk');
   const weak = findings.filter((item) => item.severity === 'weak');
   const needsReview = findings.filter((item) => item.severity === 'needs_review');
@@ -29,6 +29,10 @@ export function buildMarkdownReport(report) {
 - Cụm trùng lặp/chồng chéo: ${clusterSummary?.total ?? 0}
 - Ứng viên cần AI review: ${llmCandidateSummary?.total ?? 0}
 - Quyết định AI đã tạo: ${llmDecisionSummary?.total ?? 0}
+
+## Nguồn dữ liệu
+
+${buildSourceSection(sourceSummary)}
 
 ## Nhận định nhanh
 
@@ -59,6 +63,7 @@ ${buildClusterTable(priorityClusters)}
 - Trang rủi ro cao: kiểm tra lại indexability, nội dung mỏng, lỗi fetch hoặc thiếu metadata nghiêm trọng.
 - Trang yếu: ưu tiên cập nhật title, meta description, H1/H2, bổ sung nội dung và internal link.
 - Cụm trùng lặp/chồng chéo: chưa tự merge/redirect; cần review thủ công để chọn bài trụ cột.
+- Nếu dùng nguồn WordPress REST, ưu tiên kiểm tra thêm publish date, modified date, slug, category và tag trong `inventory.csv`.
 - Chỉ gửi các URL/cụm có trong `llm_candidates.json` sang AI để tiết kiệm token.
 - Nếu đã bật `--use-llm`, xem `llm_decisions.json` để lấy khuyến nghị dạng advisory-only.
 - Trang tốt: giữ lại, chỉ cần theo dõi định kỳ.
@@ -67,6 +72,20 @@ ${buildClusterTable(priorityClusters)}
 
 Báo cáo này chỉ đưa ra khuyến nghị. Tool chưa tự động sửa WordPress, chưa tạo redirect, chưa noindex và chưa xóa nội dung. Mọi quyết định từ AI đều cần người duyệt trước khi áp dụng.
 `;
+}
+
+function buildSourceSection(summary) {
+  if (!summary) return 'Chưa có tóm tắt nguồn dữ liệu.';
+  const rows = [
+    `- Nguồn: ${summary.source}`,
+    `- Tổng URL: ${summary.total_urls}`
+  ];
+  if (summary.source === 'wp') {
+    rows.push('- WordPress REST: read-only');
+    rows.push(`- Posts: ${summary.wordpress_posts}`);
+    rows.push(`- Pages: ${summary.wordpress_pages}`);
+  }
+  return rows.join('\n');
 }
 
 function buildQuickComment(summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary) {

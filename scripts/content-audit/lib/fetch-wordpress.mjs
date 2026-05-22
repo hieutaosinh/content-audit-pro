@@ -1,4 +1,6 @@
+import * as cheerio from 'cheerio';
 import { normalizeUrl } from './normalize-url.mjs';
+import { buildContentHash } from './content-hash.mjs';
 
 const DEFAULT_TYPES = ['posts', 'pages'];
 
@@ -87,10 +89,18 @@ function normalizeWordPressItem(item, type, statusCode) {
   const title = cleanText(rendered(item.title));
   const excerpt = cleanText(stripHtml(rendered(item.excerpt)));
   const contentHtml = rendered(item.content);
+  const $ = cheerio.load(contentHtml || '');
+  $('script, style, noscript, template').remove();
+
   const h1 = title ? [title] : [];
-  const h2 = extractHeadings(contentHtml, 'h2');
-  const h3 = extractHeadings(contentHtml, 'h3');
-  const text = cleanText(stripHtml(contentHtml));
+  const h2 = extractHeadings($, 'h2');
+  const h3 = extractHeadings($, 'h3');
+  const text = cleanText($.root().text());
+  const links = extractLinks($, url);
+  const images = extractImages($, url, item);
+  const category = firstEmbeddedName(item, 'wp:term', 'category') || firstId(item.categories);
+  const tags = uniqueStrings(embeddedNames(item, 'wp:term', 'post_tag').concat(idList(item.tags)));
+  const modifiedAt = item.modified_gmt || item.modified || null;
 
   return {
     url,
@@ -108,15 +118,16 @@ function normalizeWordPressItem(item, type, statusCode) {
     h2,
     h3,
     word_count: countWords(text),
-    internal_links: [],
-    external_links: [],
-    images_total: countMatches(contentHtml, /<img\b/gi),
-    images_missing_alt: countMissingAltImages(contentHtml),
+    internal_links: links.internal,
+    external_links: links.external,
+    images_total: images.total,
+    images_missing_alt: images.missing_alt,
+    images: images.items,
     published_at: item.date_gmt || item.date || null,
-    modified_at: item.modified_gmt || item.modified || null,
-    category: firstEmbeddedName(item, 'wp:term', 'category') || firstId(item.categories),
-    tags: embeddedNames(item, 'wp:term', 'post_tag').concat(idList(item.tags)),
-    content_hash: simpleHash(`${item.id}|${item.modified_gmt || item.modified || ''}|${text}`),
+    modified_at: modifiedAt,
+    category,
+    tags,
+    content_hash: buildContentHash({ wp_id: item.id, wp_type: type, modified_at: modifiedAt, title, meta_description: excerpt, h1, h2, h3, body_text: text, internal_links: links.internal, external_links: links.external, images: images.items, category, tags }),
     fetched_at: new Date().toISOString(),
     error: null
   };
@@ -141,19 +152,83 @@ function stripHtml(html) {
     .replace(/&#039;/g, "'");
 }
 
-function extractHeadings(html, tag) {
-  const pattern = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'gi');
-  const headings = [];
-  for (const match of String(html || '').matchAll(pattern)) {
-    const text = cleanText(stripHtml(match[1]));
-    if (text) headings.push(text);
-  }
-  return headings;
+function extractHeadings($, tag) {
+  return $(tag).map((_, element) => cleanText($(element).text())).get().filter(Boolean);
 }
 
-function countMissingAltImages(html) {
-  const images = String(html || '').match(/<img\b[^>]*>/gi) || [];
-  return images.filter((img) => !/\salt\s*=\s*['"][^'"]+['"]/i.test(img)).length;
+function extractLinks($, baseUrl) {
+  const baseHost = hostname(baseUrl);
+  const internal = new Set();
+  const external = new Set();
+
+  $('a[href]').each((_, element) => {
+    const normalized = normalizeLink($(element).attr('href'), baseUrl);
+    if (!normalized) return;
+
+    const targetHost = hostname(normalized);
+    if (baseHost && targetHost === baseHost) internal.add(normalized);
+    else external.add(normalized);
+  });
+
+  return {
+    internal: [...internal].sort(),
+    external: [...external].sort()
+  };
+}
+
+function extractImages($, baseUrl, item) {
+  const featuredImage = featuredImageFromEmbedded(item);
+  const images = [];
+
+  $('img').each((_, element) => {
+    const image = $(element);
+    images.push({
+      src: normalizeLink(image.attr('src') || image.attr('data-src') || image.attr('data-lazy-src'), baseUrl) || '',
+      alt: cleanText(image.attr('alt')),
+      missing_alt: !cleanText(image.attr('alt'))
+    });
+  });
+
+  if (featuredImage?.src && !images.some((image) => image.src === featuredImage.src)) images.push(featuredImage);
+
+  const uniqueImages = uniqueImageList(images);
+  return {
+    total: uniqueImages.length,
+    missing_alt: uniqueImages.filter((image) => image.missing_alt).length,
+    items: uniqueImages
+  };
+}
+
+function featuredImageFromEmbedded(item) {
+  const media = item?._embedded?.['wp:featuredmedia'];
+  const first = Array.isArray(media) ? media[0] : null;
+  const src = first?.source_url || first?.media_details?.sizes?.full?.source_url || '';
+  if (!src) return null;
+  const alt = cleanText(first.alt_text || first.title?.rendered || '');
+  return { src, alt, missing_alt: !alt };
+}
+
+function normalizeLink(value, baseUrl) {
+  const raw = String(value || '').trim();
+  if (!raw || raw.startsWith('#')) return null;
+  if (/^(mailto|tel|javascript|data):/i.test(raw)) return null;
+
+  try {
+    const parsed = new URL(raw, baseUrl);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+    parsed.hash = '';
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function hostname(value) {
+  try {
+    return new URL(value).hostname.replace(/^www\./i, '').toLowerCase();
+  } catch {
+    return '';
+  }
 }
 
 function embeddedNames(item, rel, taxonomy) {
@@ -178,8 +253,22 @@ function idList(value) {
   return Array.isArray(value) ? value.map((item) => String(item)) : [];
 }
 
-function countMatches(value, pattern) {
-  return (String(value || '').match(pattern) || []).length;
+function uniqueStrings(values) {
+  return [...new Set((values || []).map((value) => cleanText(value)).filter(Boolean))];
+}
+
+function uniqueImageList(images) {
+  const seen = new Set();
+  const output = [];
+
+  for (const image of images) {
+    const key = `${image.src}|${image.alt}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push(image);
+  }
+
+  return output.sort((a, b) => `${a.src}|${a.alt}`.localeCompare(`${b.src}|${b.alt}`));
 }
 
 function cleanText(value) {
@@ -189,13 +278,4 @@ function cleanText(value) {
 function countWords(value) {
   const text = cleanText(value);
   return text ? text.split(/\s+/).length : 0;
-}
-
-function simpleHash(value) {
-  const text = String(value || '');
-  let hash = 0;
-  for (let index = 0; index < text.length; index += 1) {
-    hash = ((hash << 5) - hash + text.charCodeAt(index)) | 0;
-  }
-  return String(Math.abs(hash));
 }

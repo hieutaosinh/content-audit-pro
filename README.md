@@ -4,7 +4,7 @@ CLI-first content audit tool for SEO and content cleanup workflows, ưu tiên ki
 
 Current version: `0.1.0`.
 
-The current MVP collects URLs from sitemap, URL list, or WordPress REST API, extracts basic content/SEO fields, scores each URL with rule-based checks, detects basic duplicate/overlap clusters, compares with the previous audit cache, identifies pages/clusters that deserve LLM review, optionally runs advisory-only LLM reviews, and generates JSON, CSV, Markdown, and HTML reports.
+The current MVP collects URLs from sitemap, URL list, or WordPress REST API, extracts content/SEO fields, extracts internal/external links and image alt data, scores each URL with rule-based checks, detects basic duplicate/overlap clusters, compares with the previous audit cache, identifies pages/clusters that deserve LLM review, optionally runs advisory-only LLM reviews, and generates JSON, CSV, Markdown, and HTML reports.
 
 ## Language Direction
 
@@ -167,7 +167,9 @@ content_audit_report.md
 content_audit_report.html
 ```
 
-`inventory.json` and `inventory.csv` include basic URL inventory. In WordPress mode, they also include post/page metadata such as ID, slug, status, publish date, modified date, category, and tags.
+`inventory.json` includes URL inventory with deterministic `content_hash`, `internal_links`, `external_links`, image counts, and detailed `images` entries with `src`, `alt`, and `missing_alt`. In WordPress mode, it also includes post/page metadata such as ID, slug, status, publish date, modified date, category, and tags.
+
+`inventory.csv` includes practical review columns such as `internal_links_count`, `external_links_count`, image counts, and `content_hash` for cache/change review.
 
 `clusters.json` includes basic duplicate/overlap groups:
 
@@ -248,6 +250,22 @@ The WordPress source:
 - does not authenticate
 - does not create, update, delete, redirect, or noindex anything
 - extracts WordPress metadata for better freshness/taxonomy review
+- extracts links and image alt coverage from rendered content and embedded featured media
+
+## Content Hash And Link Extraction
+
+Phase 10 adds `scripts/content-audit/lib/content-hash.mjs` and improves extraction for HTML and WordPress REST sources.
+
+The content hash now uses SHA-256 over normalized content signals instead of a placeholder length/simple hash. Hash inputs include title, meta description, headings, body text, internal links, external links, image data, and relevant WordPress metadata where available.
+
+Link extraction keeps audit behavior deterministic:
+
+- ignores `mailto:`, `tel:`, `javascript:`, `data:`, and fragment-only links
+- removes URL fragments before storing links
+- classifies same-host links as internal, ignoring a leading `www.`
+- stores sorted unique internal and external links
+
+Image extraction records total image count, missing alt count, and per-image `src`, `alt`, and `missing_alt` data. WordPress mode also includes embedded featured media when available.
 
 ## LLM Needed Policy
 

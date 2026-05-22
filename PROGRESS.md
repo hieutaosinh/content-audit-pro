@@ -91,9 +91,21 @@ Note: `.gitignore` was attempted but the connector blocked the file creation. Ad
 - [x] HTML report now includes source summary
 - [x] README now documents WordPress REST read-only usage
 
+### Phase 10 - Content Hash And Link Extraction Improvements
+
+- [x] Added deterministic SHA-256 content hash helper: `scripts/content-audit/lib/content-hash.mjs`
+- [x] HTML extraction now builds content hashes from normalized title, meta, headings, body text, links, and image data
+- [x] HTML extraction now extracts sorted unique internal links and external links
+- [x] HTML extraction now records per-image `src`, `alt`, and `missing_alt` data
+- [x] WordPress REST extraction now uses the same stronger hash helper
+- [x] WordPress REST extraction now extracts links from rendered content
+- [x] WordPress REST extraction now improves image/alt extraction and includes embedded featured media when available
+- [x] Inventory CSV now includes link counts and `content_hash`
+- [x] README now documents Phase 10 outputs and deterministic link/hash behavior
+
 ## Current MVP Status
 
-The project can now run a basic inventory, scoring, report, cluster, re-audit comparison, LLM-needed candidate selection, optional advisory-only LLM review, and WordPress REST read-only source collection:
+The project can now run a basic inventory, scoring, report, cluster, re-audit comparison, LLM-needed candidate selection, optional advisory-only LLM review, WordPress REST read-only source collection, deterministic content hashing, internal/external link extraction, and image alt extraction:
 
 ```bash
 npm install
@@ -145,19 +157,36 @@ audits/content/example-test/content_audit_report.md
 audits/content/example-test/content_audit_report.html
 ```
 
-## Current WordPress REST Output
+## Current Inventory Output
 
-When running with `--source wp`, `inventory.json` and `inventory.csv` include:
+`inventory.json` includes:
+
+- `url`
+- `status`
+- `ok`
+- `canonical`
+- `title`
+- `meta_description`
+- `h1`, `h2`, `h3`
+- `word_count`
+- `internal_links`
+- `external_links`
+- `images_total`
+- `images_missing_alt`
+- `images[]` with `src`, `alt`, and `missing_alt`
+- `published_at`
+- `modified_at`
+- `category`
+- `tags`
+- `content_hash`
+
+When running with `--source wp`, `inventory.json` and `inventory.csv` also include:
 
 - `source_type`
 - `wp_type`
 - `wp_id`
 - `wp_slug`
 - `wp_status`
-- `published_at`
-- `modified_at`
-- `category`
-- `tags`
 
 WordPress mode uses public GET requests only and does not authenticate or write to WordPress.
 
@@ -174,6 +203,8 @@ WordPress mode uses public GET requests only and does not authenticate or write 
 - `fixed_issues`
 - `persistent_issues`
 - sample URL lists for review
+
+Cache comparison now uses the stronger deterministic `content_hash` for improved change detection.
 
 ## Current LLM Candidate Output
 
@@ -214,30 +245,30 @@ Every decision remains advisory-only and requires human review before implementa
 
 ## Known Limitations
 
-- Cache uses current placeholder `content_hash`; stronger hash should be added later
 - Cluster logic is still lightweight and deterministic
 - LLM policy is deterministic and conservative; it may need tuning after real audits
 - LLM client currently supports chat-completions style JSON responses
 - WordPress REST source currently uses public unauthenticated reads only
-- Internal/external link extraction is currently a placeholder
+- Link extraction does not crawl discovered links; it only records links present in audited page content
 - `.gitignore` still needs to be added
 
 ## Next Phase
 
-Phase 10 - Content Hash And Link Extraction Improvements
+Phase 11 - Extraction QA And Link-Aware Scoring
 
-Planned files:
+Potential files:
 
-- `scripts/content-audit/lib/content-hash.mjs`
-- update `scripts/content-audit/lib/extract-page.mjs`
-- update `scripts/content-audit/lib/fetch-wordpress.mjs`
+- update `scripts/content-audit/lib/score-rules.mjs`
+- update `scripts/content-audit/lib/report-md.mjs`
+- update `scripts/content-audit/lib/report-html.mjs`
+- add focused tests or fixtures for extraction behavior
 
-Planned outputs/improvements:
+Potential outputs/improvements:
 
-- stronger content hash for cache accuracy
-- extract internal links
-- extract external links
-- improve image/alt extraction for WordPress content
+- use internal/external link counts in scoring more explicitly
+- add broken/empty link QA flags when safe and deterministic
+- expose link/image extraction summaries in Markdown and HTML reports
+- add small deterministic test fixtures before more automation
 
 Planned safeguards:
 

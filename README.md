@@ -4,7 +4,7 @@ CLI-first content audit tool for SEO and content cleanup workflows, ưu tiên ki
 
 Current version: `0.1.0`.
 
-The current MVP collects URLs, fetches pages, extracts basic content/SEO fields, scores each URL with rule-based checks, detects basic duplicate/overlap clusters, compares with the previous audit cache, identifies pages/clusters that deserve LLM review, and generates JSON, CSV, Markdown, and HTML reports.
+The current MVP collects URLs, fetches pages, extracts basic content/SEO fields, scores each URL with rule-based checks, detects basic duplicate/overlap clusters, compares with the previous audit cache, identifies pages/clusters that deserve LLM review, optionally runs advisory-only LLM reviews, and generates JSON, CSV, Markdown, and HTML reports.
 
 ## Language Direction
 
@@ -31,7 +31,9 @@ The tool does not:
 - Push noindex rules
 - Delete posts/pages
 - Perform destructive actions automatically
-- Send pages to an LLM automatically
+- Send pages to an LLM unless `--use-llm` is explicitly enabled
+
+LLM output is advisory-only and always requires human judgment before applying content, redirect, merge, noindex, or deletion decisions.
 
 ## Install
 
@@ -58,6 +60,35 @@ npm run audit -- \
   --urls samples/urls.txt \
   --limit 20 \
   --out audits/content/url-list-test
+```
+
+## Run With LLM Review
+
+By default, the tool only creates `llm_candidates.json`. It does not call an LLM.
+
+To run advisory AI review, set an API key and pass `--use-llm`:
+
+```bash
+export OPENAI_API_KEY="your-key"
+
+npm run audit -- \
+  --url https://example.com/sitemap.xml \
+  --source sitemap \
+  --limit 20 \
+  --use-llm \
+  --llm-model gpt-4.1-mini \
+  --llm-max-candidates 5 \
+  --out audits/content/example-test
+```
+
+You can also use `LLM_API_KEY` and override the endpoint:
+
+```bash
+npm run audit -- \
+  --url https://example.com/sitemap.xml \
+  --source sitemap \
+  --use-llm \
+  --llm-api-url https://api.openai.com/v1/chat/completions
 ```
 
 ## Cache Options
@@ -88,6 +119,14 @@ npm run audit -- \
   --out audits/content/example-test
 ```
 
+LLM decisions are cached separately under:
+
+```txt
+.cache/content-audit/llm-decisions
+```
+
+Override this with `--llm-cache-dir`.
+
 ## Current Outputs
 
 ```txt
@@ -95,6 +134,8 @@ inventory.json
 rule_findings.json
 clusters.json
 llm_candidates.json
+llm_decisions.json
+llm_calls.jsonl
 cache_summary.json
 inventory.csv
 content_action_plan.csv
@@ -119,7 +160,17 @@ content_audit_report.html
 - review goal
 - cache key
 
-The tool only creates this candidate list. It does not call any LLM yet.
+`llm_decisions.json` includes advisory-only LLM review results when `--use-llm` is enabled:
+
+- recommendation
+- confidence
+- reason in Vietnamese
+- suggested actions
+- risks
+- next review questions
+- human approval requirement
+
+`llm_calls.jsonl` logs request/response events for traceability when LLM review is enabled.
 
 `cache_summary.json` includes re-audit comparison:
 
@@ -178,9 +229,26 @@ The policy avoids LLM usage for purely measurable or technical issues such as:
 - missing title/meta/H1 when the fix is straightforward
 - image alt or taxonomy cleanup
 
+## LLM Client And Prompt Contracts
+
+Phase 8 adds:
+
+- `scripts/content-audit/lib/llm-client.mjs`
+- `scripts/content-audit/prompts/page-quality-review.v1.md`
+- `scripts/content-audit/prompts/content-cluster-review.v1.md`
+
+Rules:
+
+- LLM must return JSON only
+- LLM results are normalized before writing output
+- Failed LLM calls are recorded as failed decisions instead of crashing the whole audit
+- Every LLM request/response event is logged
+- LLM results are cached by candidate cache key
+- All recommendations are advisory-only
+
 ## Current CLI Messages
 
-Terminal messages are Vietnamese-first and now include cache/delta and LLM candidate summaries:
+Terminal messages are Vietnamese-first and now include cache/delta, LLM candidate, and LLM decision summaries:
 
 ```txt
 Tóm tắt ứng viên cần AI review:
@@ -188,6 +256,11 @@ Tóm tắt ứng viên cần AI review:
 - Ưu tiên cao: 1
 - Page candidates: 3
 - Cluster candidates: 2
+
+Tóm tắt kết quả AI review:
+- Đã bật LLM: Có
+- Quyết định AI: 5
+- Cần người duyệt: 5
 
 Tóm tắt so sánh với lần audit trước:
 - Có cache trước đó: Có

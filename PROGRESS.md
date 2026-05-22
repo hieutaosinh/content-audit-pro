@@ -68,9 +68,21 @@ Note: `.gitignore` was attempted but the connector blocked the file creation. Ad
 - [x] HTML report now includes LLM candidate summary
 - [x] README now documents the LLM candidate output and safety scope
 
+### Phase 8 - LLM Client And Prompt Contracts
+
+- [x] Added LLM client: `scripts/content-audit/lib/llm-client.mjs`
+- [x] Added prompt contract: `scripts/content-audit/prompts/page-quality-review.v1.md`
+- [x] Added prompt contract: `scripts/content-audit/prompts/content-cluster-review.v1.md`
+- [x] Added `--use-llm`, `--llm-model`, `--llm-api-url`, `--llm-max-candidates`, `--llm-cache-dir`, and `--prompt-dir` CLI options
+- [x] CLI now generates `llm_decisions.json`
+- [x] CLI now logs LLM request/response events to `llm_calls.jsonl`
+- [x] Markdown report now includes LLM decision summary
+- [x] HTML report now includes LLM decision summary
+- [x] README now documents LLM usage and safeguards
+
 ## Current MVP Status
 
-The project can now run a basic inventory, scoring, report, cluster, re-audit comparison, and LLM-needed candidate selection:
+The project can now run a basic inventory, scoring, report, cluster, re-audit comparison, LLM-needed candidate selection, and optional advisory-only LLM review:
 
 ```bash
 npm install
@@ -81,6 +93,21 @@ npm run audit -- \
   --out audits/content/example-test
 ```
 
+Optional LLM review:
+
+```bash
+export OPENAI_API_KEY="your-key"
+
+npm run audit -- \
+  --url https://example.com/sitemap.xml \
+  --source sitemap \
+  --limit 20 \
+  --use-llm \
+  --llm-model gpt-4.1-mini \
+  --llm-max-candidates 5 \
+  --out audits/content/example-test
+```
+
 Expected outputs:
 
 ```txt
@@ -88,6 +115,8 @@ audits/content/example-test/inventory.json
 audits/content/example-test/rule_findings.json
 audits/content/example-test/clusters.json
 audits/content/example-test/llm_candidates.json
+audits/content/example-test/llm_decisions.json
+audits/content/example-test/llm_calls.jsonl
 audits/content/example-test/cache_summary.json
 audits/content/example-test/inventory.csv
 audits/content/example-test/content_action_plan.csv
@@ -120,37 +149,60 @@ audits/content/example-test/content_audit_report.html
 - `summary.cluster_candidates`
 - `candidates[]` with type, priority, reason, prompt contract, review goal, flags/URLs, and cache key
 
-This phase only selects what should be reviewed by AI. It does not call an LLM and does not mutate website content.
+This phase only selects what should be reviewed by AI. It does not call an LLM and does not mutate website content unless `--use-llm` is explicitly enabled.
+
+## Current LLM Decision Output
+
+`llm_decisions.json` includes:
+
+- whether LLM review was enabled
+- total/selected/skipped candidate counts
+- cache/log paths
+- decision summary
+- advisory-only decisions
+- failed decisions when the LLM call or JSON parsing fails
+
+Decision recommendations are normalized to:
+
+```txt
+keep
+update
+merge_review
+noindex_review
+redirect_review
+manual_review
+```
+
+Every decision remains advisory-only and requires human review before implementation.
 
 ## Known Limitations
 
 - Cache uses current placeholder `content_hash`; stronger hash should be added later
 - Cluster logic is still lightweight and deterministic
 - LLM policy is deterministic and conservative; it may need tuning after real audits
-- No LLM client yet
+- LLM client currently supports chat-completions style JSON responses
 - WordPress REST source is not implemented yet
 - Internal/external link extraction is currently a placeholder
 - `.gitignore` still needs to be added
 
 ## Next Phase
 
-Phase 8 - LLM Client And Prompt Contracts
+Phase 9 - WordPress REST API Read-Only
 
 Planned files:
 
-- `scripts/content-audit/lib/llm-client.mjs`
-- `scripts/content-audit/prompts/content-cluster-review.v1.md`
-- `scripts/content-audit/prompts/page-quality-review.v1.md`
+- `scripts/content-audit/lib/fetch-wordpress.mjs`
 - update `scripts/content-audit/content-audit.mjs`
+- update reports with WordPress source metadata
 
-Planned outputs:
+Planned outputs/improvements:
 
-- `llm_decisions.json`
+- collect posts/pages from WordPress REST
+- get publish date, modified date, slug, status, category, tag, and content more reliably
+- keep the source read-only
 
 Planned safeguards:
 
-- LLM returns JSON only
-- Every LLM call is logged
-- Every LLM result is cached
-- LLM output is advisory only
-- No direct WordPress mutation
+- no WordPress write actions
+- no redirect/noindex/delete actions
+- authentication optional and read-only if added later

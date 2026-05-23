@@ -120,6 +120,13 @@ This file tracks implementation progress in the repository.
 - [x] HTML report now includes link and image extraction summary
 - [x] Added link-aware scoring tests: `tests/score-rules.test.mjs`
 
+### Phase 13 - Release Validation And Tagging Prep
+
+- [x] Added GitHub Actions CI workflow for Node.js 20 and 22
+- [x] Added release checklist: `docs/RELEASE_CHECKLIST.md`
+- [x] Added changelog: `CHANGELOG.md`
+- [x] README now links release validation docs and CI/readiness notes
+
 ## Current MVP Status
 
 The project can now run a CLI-first content audit with sitemap, URL list, or public WordPress REST input. It generates inventory, scoring, clusters, cache/delta comparison, LLM candidate selection, optional advisory-only LLM decisions, JSON/CSV/Markdown/HTML reports, deterministic content hashes, internal/external link extraction, image alt extraction, and link-aware scoring/report summaries.
@@ -223,6 +230,23 @@ Link-aware scoring uses deterministic extracted data only. It currently checks:
 
 This does not crawl discovered links or verify whether those linked pages are alive yet.
 
+## Release Validation
+
+Before tagging `v0.1.0`, validate from a clean checkout or VPS:
+
+```bash
+npm install
+npm test
+npm run audit:help
+npm run audit -- \
+  --url https://example.com/sitemap.xml \
+  --source sitemap \
+  --limit 20 \
+  --out audits/content/release-smoke-test
+```
+
+See `docs/RELEASE_CHECKLIST.md` for the full validation flow.
+
 ## Current Cache Output
 
 `cache_summary.json` includes:
@@ -285,18 +309,6 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-Recommended validation before tagging:
-
-```bash
-npm install
-npm test
-npm run audit -- \
-  --url https://example.com/sitemap.xml \
-  --source sitemap \
-  --limit 20 \
-  --out audits/content/release-smoke-test
-```
-
 ## Known Limitations
 
 - Cluster logic is still lightweight and deterministic
@@ -308,18 +320,17 @@ npm run audit -- \
 
 ## Next Phase
 
-Phase 13 - Release Validation And Tagging
+Phase 14 - Real-Site Audit Feedback And Calibration
 
 Potential files/actions:
 
-- run `npm install`
-- run `npm test`
-- run a smoke audit on a small sitemap or WordPress site
-- fix any test/runtime failures found during validation
-- tag `v0.1.0` after validation passes
+- run real audits on 1-3 websites
+- review generated `content_action_plan.csv` and HTML reports
+- tune scoring thresholds and Vietnamese notes based on real outputs
+- improve report language before adding more automation
 
 Planned safeguards:
 
 - no WordPress write actions
 - no redirect/noindex/delete actions
-- release only after CLI validation passes
+- only tune deterministic scoring/reporting based on observed audit quality

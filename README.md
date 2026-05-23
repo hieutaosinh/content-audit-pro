@@ -49,6 +49,8 @@ npm test
 
 For VPS/Linux deployment notes, see `docs/VPS_LINUX_SETUP.md`.
 
+For release validation before tagging `v0.1.0`, see `docs/RELEASE_CHECKLIST.md`.
+
 ## Run With Sitemap
 
 ```bash
@@ -229,10 +231,13 @@ This repository is prepared for a first CLI-only release target:
 - `npm install`
 - `npm test`
 - `npm run audit -- ...`
+- GitHub Actions CI on Node.js 20 and 22
 - Linux/VPS setup guide in `docs/VPS_LINUX_SETUP.md`
+- Release checklist in `docs/RELEASE_CHECKLIST.md`
+- Changelog in `CHANGELOG.md`
 - `.gitignore` excludes local audit outputs, cache, environment files, dependencies, and logs
 
-Recommended release tag after Phase 11 is merged and validated:
+Recommended release tag after Phase 13 is merged and validation passes:
 
 ```bash
 git tag v0.1.0

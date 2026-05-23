@@ -18,18 +18,27 @@ export function buildHtmlReport(report) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Báo cáo Content Audit</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; background: #f6f7f9; color: #17202a; }
+    body { font-family: Arial, sans-serif; margin: 0; background: #f3f5f7; color: #17202a; }
     main { max-width: 1120px; margin: 0 auto; padding: 32px 20px; }
     h1, h2 { margin: 0 0 16px; }
-    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 20px; margin-bottom: 18px; box-shadow: 0 8px 24px rgba(0,0,0,0.04); }
+    .card { background: #fff; border: 1px solid #dfe4ea; border-radius: 8px; padding: 20px; margin-bottom: 18px; box-shadow: 0 8px 24px rgba(15,23,42,0.04); }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
-    .metric { background: #f9fafb; border-radius: 12px; padding: 14px; }
+    .metric { background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #64748b; border-radius: 8px; padding: 14px; }
     .metric strong { display: block; font-size: 24px; margin-top: 6px; }
     table { width: 100%; border-collapse: collapse; background: #fff; }
     th, td { text-align: left; padding: 10px; border-bottom: 1px solid #edf0f3; vertical-align: top; }
     th { background: #f9fafb; }
     .small { color: #5f6b7a; font-size: 14px; }
-    .badge { display: inline-block; border-radius: 999px; padding: 4px 10px; background: #eef2ff; font-size: 13px; }
+    .badge { display: inline-block; border-radius: 999px; padding: 4px 10px; background: #eef2ff; font-size: 13px; font-weight: 700; }
+    .badge.healthy { background: #dcfce7; color: #166534; }
+    .badge.needs_review { background: #fef3c7; color: #92400e; }
+    .badge.weak { background: #ffedd5; color: #9a3412; }
+    .badge.high_risk { background: #fee2e2; color: #991b1b; }
+    .row-healthy td { background: #fbfefc; }
+    .row-needs_review td { background: #fffaf0; }
+    .row-weak td { background: #fff7ed; }
+    .row-high_risk td { background: #fff1f2; }
+    .tier { border-left: 4px solid #2563eb; }
     a { color: #1d4ed8; }
   </style>
 </head>
@@ -40,6 +49,12 @@ export function buildHtmlReport(report) {
       <p class="small">Nguồn kiểm tra: ${escapeHtml(inputUrl)} | Loại nguồn: ${escapeHtml(source)} | Tạo lúc: ${escapeHtml(generatedAt)}</p>
       <p>${escapeHtml(buildQuickComment(summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary, extractionSummary))}</p>
     </section>
+
+    <section class="card tier"><h2>Hai tầng vận hành</h2><div class="grid">
+      ${metric('Tầng 1', 'Rule-based report')}
+      ${metric('Tầng 2', llmDecisionSummary?.total > 0 ? 'LLM optional đã bật' : 'LLM optional đang tắt')}
+      ${metric('Chi phí LLM', llmDecisionSummary?.total > 0 ? 'Có phát sinh theo API' : 'Không phát sinh')}
+    </div><p class="small">Report mặc định dùng rule-based scoring để ổn định, nhanh và dễ giải thích. LLM chỉ dùng khi bật riêng để review một số URL/cụm khó quyết định.</p></section>
 
     <section class="card"><h2>Tóm tắt nguồn dữ liệu</h2><div class="grid">
       ${metric('Nguồn', sourceSummary?.source || source)}
@@ -165,7 +180,7 @@ function buildLlmDecisionHtml(summary) {
 
 function buildPriorityTable(items) {
   if (!items.length) return '<p>Chưa có URL cần ưu tiên trong lần kiểm tra này.</p>';
-  const rows = items.map((item) => `<tr><td><a href="${escapeAttr(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.url)}</a></td><td>${escapeHtml(item.server_score)}</td><td><span class="badge">${escapeHtml(item.severity_vi)}</span></td><td>${escapeHtml((item.notes_vi || []).slice(0, 3).join('; '))}</td></tr>`).join('');
+  const rows = items.map((item) => `<tr class="row-${escapeAttr(item.severity)}"><td><a href="${escapeAttr(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.url)}</a></td><td>${escapeHtml(item.server_score)}</td><td><span class="badge ${escapeAttr(item.severity)}">${escapeHtml(item.severity_vi)}</span></td><td>${escapeHtml((item.notes_vi || []).slice(0, 3).join('; '))}</td></tr>`).join('');
   return `<table><thead><tr><th>URL</th><th>Điểm</th><th>Mức độ</th><th>Ghi chú</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 

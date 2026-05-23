@@ -70,9 +70,9 @@ ${buildClusterTable(priorityClusters)}
 - Trang có ít internal link: thêm liên kết đến bài liên quan, trang dịch vụ, danh mục hoặc bài trụ cột phù hợp.
 - Trang thiếu alt ảnh: bổ sung alt text mô tả ảnh tự nhiên, tránh nhồi keyword.
 - Cụm trùng lặp/chồng chéo: chưa tự merge/redirect; cần review thủ công để chọn bài trụ cột.
-- Nếu dùng nguồn WordPress REST, ưu tiên kiểm tra thêm publish date, modified date, slug, category và tag trong 'inventory.csv'.
-- Chỉ gửi các URL/cụm có trong 'llm_candidates.json' sang AI để tiết kiệm token.
-- Nếu đã bật '--use-llm', xem 'llm_decisions.json' để lấy khuyến nghị dạng advisory-only.
+- Nếu dùng nguồn WordPress REST, ưu tiên kiểm tra thêm publish date, modified date, slug, category và tag trong inventory.csv.
+- Chỉ gửi các URL/cụm có trong llm_candidates.json sang AI để tiết kiệm token.
+- Nếu đã bật --use-llm, xem llm_decisions.json để lấy khuyến nghị dạng advisory-only.
 - Trang tốt: giữ lại, chỉ cần theo dõi định kỳ.
 
 ## Lưu ý an toàn

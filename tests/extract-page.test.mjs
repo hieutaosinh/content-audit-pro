@@ -50,8 +50,8 @@ test('extractPageFromHtml extracts deterministic internal and external links', (
   const page = extractPageFromHtml('https://example.com/bai-kiem-tra', html, 200);
 
   assert.deepEqual(page.internal_links, [
-    'https://example.com/cung-host',
-    'https://example.com/noi-bo'
+    'https://example.com/noi-bo',
+    'https://www.example.com/cung-host'
   ]);
   assert.deepEqual(page.external_links, ['https://external.test/post?x=1']);
 });

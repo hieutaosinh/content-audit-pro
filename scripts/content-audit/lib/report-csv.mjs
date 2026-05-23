@@ -7,8 +7,10 @@ export async function writeCsvReport(filePath, rows, columns) {
   return filePath;
 }
 
-export function buildInventoryRows(inventory) {
+export function buildInventoryRows(inventory, findings = []) {
+  const findingByUrl = new Map(findings.map((item) => [item.url, item]));
   return inventory.map((page) => ({
+    ...findingSummary(findingByUrl.get(page.url)),
     url: page.url,
     status: page.status,
     ok: page.ok,
@@ -51,6 +53,13 @@ export function buildActionPlanRows(findings) {
 }
 
 export const inventoryColumns = [
+  { key: 'server_score', header: 'server_score' },
+  { key: 'severity', header: 'severity' },
+  { key: 'severity_vi', header: 'severity_vi' },
+  { key: 'recommended_action', header: 'recommended_action' },
+  { key: 'requires_human_approval', header: 'requires_human_approval' },
+  { key: 'flags', header: 'flags' },
+  { key: 'notes_vi', header: 'notes_vi' },
   { key: 'url', header: 'url' },
   { key: 'status', header: 'status' },
   { key: 'ok', header: 'ok' },
@@ -103,6 +112,30 @@ function recommendAction(item) {
 function requiresApproval(item) {
   const action = recommendAction(item);
   return ['REVIEW_PRIORITY', 'REVIEW_DUPLICATE'].includes(action);
+}
+
+function findingSummary(item) {
+  if (!item) {
+    return {
+      server_score: '',
+      severity: '',
+      severity_vi: '',
+      recommended_action: '',
+      requires_human_approval: '',
+      flags: '',
+      notes_vi: ''
+    };
+  }
+
+  return {
+    server_score: item.server_score,
+    severity: item.severity,
+    severity_vi: item.severity_vi,
+    recommended_action: recommendAction(item),
+    requires_human_approval: requiresApproval(item),
+    flags: joinArray(item.server_flags),
+    notes_vi: joinArray(item.notes_vi)
+  };
 }
 
 function resolveValue(row, key) {

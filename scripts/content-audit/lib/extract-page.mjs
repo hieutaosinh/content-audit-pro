@@ -96,10 +96,6 @@ function normalizeLink(value, baseUrl) {
   try {
     const parsed = new URL(raw, baseUrl);
     if (!['http:', 'https:'].includes(parsed.protocol)) return null;
-    const base = new URL(baseUrl);
-    if (hostname(parsed.toString()) === hostname(base.toString())) {
-      parsed.hostname = base.hostname.replace(/^www\./i, '');
-    }
     parsed.hash = '';
     return parsed.toString();
   } catch {

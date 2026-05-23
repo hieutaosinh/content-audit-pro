@@ -6,9 +6,10 @@ export async function writeHtmlReport(filePath, report) {
 }
 
 export function buildHtmlReport(report) {
-  const { generatedAt, inputUrl, source, sourceSummary, summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary, findings, clusters = [] } = report;
+  const { generatedAt, inputUrl, source, sourceSummary, summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary, inventory = [], findings, clusters = [] } = report;
   const priorityItems = findings.filter((item) => ['high_risk', 'weak', 'needs_review'].includes(item.severity)).slice(0, 30);
   const priorityClusters = clusters.filter((item) => ['high', 'medium'].includes(item.risk)).slice(0, 20);
+  const extractionSummary = summarizeExtraction(inventory);
 
   return `<!doctype html>
 <html lang="vi">
@@ -37,7 +38,7 @@ export function buildHtmlReport(report) {
     <section class="card">
       <h1>Báo cáo Content Audit</h1>
       <p class="small">Nguồn kiểm tra: ${escapeHtml(inputUrl)} | Loại nguồn: ${escapeHtml(source)} | Tạo lúc: ${escapeHtml(generatedAt)}</p>
-      <p>${escapeHtml(buildQuickComment(summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary))}</p>
+      <p>${escapeHtml(buildQuickComment(summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary, extractionSummary))}</p>
     </section>
 
     <section class="card"><h2>Tóm tắt nguồn dữ liệu</h2><div class="grid">
@@ -60,6 +61,7 @@ export function buildHtmlReport(report) {
       ${metric('AI decisions', llmDecisionSummary?.total ?? 0)}
     </div></section>
 
+    <section class="card"><h2>Tóm tắt liên kết và hình ảnh</h2>${buildExtractionHtml(extractionSummary)}</section>
     <section class="card"><h2>So sánh với lần audit trước</h2>${buildDeltaHtml(cacheSummary)}</section>
     <section class="card"><h2>Ứng viên cần AI review</h2>${buildLlmCandidateHtml(llmCandidateSummary)}</section>
     <section class="card"><h2>Kết quả AI review</h2>${buildLlmDecisionHtml(llmDecisionSummary)}</section>
@@ -68,6 +70,8 @@ export function buildHtmlReport(report) {
     <section class="card"><h2>Gợi ý xử lý</h2><ul>
       <li>Ưu tiên URL rủi ro cao và vấn đề còn tồn tại qua nhiều lần audit.</li>
       <li>Với trang yếu, kiểm tra title, meta description, H1/H2, độ dài nội dung và internal link.</li>
+      <li>Với trang có ít internal link, thêm liên kết đến bài liên quan, trang dịch vụ, danh mục hoặc bài trụ cột phù hợp.</li>
+      <li>Với ảnh thiếu alt, bổ sung alt text mô tả tự nhiên, tránh nhồi keyword.</li>
       <li>Với cụm trùng lặp/chồng chéo, chưa tự merge/redirect; cần review thủ công để chọn bài trụ cột.</li>
       <li>Nếu dùng nguồn WordPress REST, kiểm tra thêm publish date, modified date, slug, category và tag trong <code>inventory.csv</code>.</li>
       <li>Chỉ gửi các URL/cụm trong <code>llm_candidates.json</code> sang AI để tiết kiệm token.</li>
@@ -82,6 +86,44 @@ export function buildHtmlReport(report) {
 
 function metric(label, value) {
   return `<div class="metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+}
+
+function summarizeExtraction(inventory) {
+  const pages = Array.isArray(inventory) ? inventory : [];
+  const totalPages = pages.length;
+  const totalInternalLinks = pages.reduce((sum, page) => sum + arrayLength(page.internal_links), 0);
+  const totalExternalLinks = pages.reduce((sum, page) => sum + arrayLength(page.external_links), 0);
+  const pagesWithoutInternalLinks = pages.filter((page) => arrayLength(page.internal_links) === 0).length;
+  const pagesWithExternalNoInternal = pages.filter((page) => arrayLength(page.external_links) > 0 && arrayLength(page.internal_links) === 0).length;
+  const totalImages = pages.reduce((sum, page) => sum + Number(page.images_total || 0), 0);
+  const totalMissingAlt = pages.reduce((sum, page) => sum + Number(page.images_missing_alt || 0), 0);
+
+  return {
+    total_pages: totalPages,
+    total_internal_links: totalInternalLinks,
+    total_external_links: totalExternalLinks,
+    average_internal_links: totalPages ? round(totalInternalLinks / totalPages) : 0,
+    average_external_links: totalPages ? round(totalExternalLinks / totalPages) : 0,
+    pages_without_internal_links: pagesWithoutInternalLinks,
+    pages_with_external_no_internal: pagesWithExternalNoInternal,
+    total_images: totalImages,
+    total_images_missing_alt: totalMissingAlt,
+    missing_alt_ratio: totalImages ? round((totalMissingAlt / totalImages) * 100) : 0
+  };
+}
+
+function buildExtractionHtml(summary) {
+  if (!summary || summary.total_pages === 0) return '<p>Chưa có dữ liệu liên kết/hình ảnh để tổng hợp.</p>';
+  return `<div class="grid">
+    ${metric('Internal links', summary.total_internal_links)}
+    ${metric('Internal / URL', summary.average_internal_links)}
+    ${metric('URL chưa có internal link', summary.pages_without_internal_links)}
+    ${metric('External links', summary.total_external_links)}
+    ${metric('External / URL', summary.average_external_links)}
+    ${metric('External nhưng thiếu internal', summary.pages_with_external_no_internal)}
+    ${metric('Tổng ảnh', summary.total_images)}
+    ${metric('Ảnh thiếu alt', `${summary.total_images_missing_alt} (${summary.missing_alt_ratio}%)`)}
+  </div><p class="small">Chi tiết từng URL nằm trong <code>inventory.json</code> và <code>inventory.csv</code>.</p>`;
 }
 
 function buildDeltaHtml(cacheSummary) {
@@ -133,15 +175,24 @@ function buildClusterTable(items) {
   return `<table><thead><tr><th>Cluster</th><th>Chủ đề gợi ý</th><th>Số URL</th><th>Rủi ro</th><th>Lý do</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-function buildQuickComment(summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary) {
+function buildQuickComment(summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary, extractionSummary) {
   if ((llmDecisionSummary?.requires_human_approval || 0) > 0) return 'Đã có quyết định AI advisory-only cần người duyệt trước khi áp dụng.';
   if (cacheSummary?.delta?.persistent_issues > 0) return 'Website còn vấn đề lặp lại qua nhiều lần audit, nên ưu tiên xử lý nhóm này.';
   if ((llmCandidateSummary?.high_priority || 0) > 0) return 'Có ứng viên ưu tiên cao cần AI review, nên xử lý nhóm này trước khi tạo kế hoạch content sâu hơn.';
   if (summary.total === 0) return 'Chưa có URL nào được kiểm tra.';
+  if ((extractionSummary?.pages_without_internal_links || 0) > 0) return 'Một số URL chưa phát hiện internal link, nên ưu tiên bổ sung liên kết nội bộ phù hợp.';
   if ((clusterSummary?.high || 0) > 0) return 'Website có cụm nội dung rủi ro cao, nên review khả năng trùng lặp/cannibalization trước.';
   if (summary.high_risk > 0) return 'Website có URL rủi ro cao, nên xử lý nhóm này trước.';
   if ((clusterSummary?.medium || 0) > 0) return 'Website có cụm nội dung chồng chéo, nên rà soát để tránh phân tán tín hiệu SEO.';
   return 'Các URL đang ở trạng thái tương đối tốt theo rule-based scoring hiện tại.';
+}
+
+function arrayLength(value) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function round(value) {
+  return Math.round(Number(value || 0) * 10) / 10;
 }
 
 function escapeHtml(value) {

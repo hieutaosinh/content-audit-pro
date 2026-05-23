@@ -172,14 +172,40 @@ function scoreDuplicateRisk(page, context, flags, notes) {
 
 function scoreInternalLinks(page, config, flags, notes) {
   let score = config.scoreWeights.internalLinks;
-  const count = Array.isArray(page.internal_links) ? page.internal_links.length : 0;
+  const internalCount = Array.isArray(page.internal_links) ? page.internal_links.length : 0;
+  const externalCount = Array.isArray(page.external_links) ? page.external_links.length : 0;
+  const words = Number(page.word_count || 0);
+  const targetPerThousandWords = Number(config.internalLinks?.targetPerThousandWords || 0);
+  const expectedByLength = words > 0 && targetPerThousandWords > 0 ? Math.ceil((words / 1000) * targetPerThousandWords) : 0;
+  const minimumExpected = Math.max(Number(config.internalLinks.minOutbound || 0), Math.min(expectedByLength, 8));
 
-  if (count === 0) {
+  if (internalCount === 0) {
     score -= 6;
     add(flags, notes, 'no_internal_links_detected', 'Chưa phát hiện internal link trong trang.');
-  } else if (count < config.internalLinks.minOutbound) {
+  } else if (internalCount < config.internalLinks.minOutbound) {
     score -= 3;
     add(flags, notes, 'low_internal_links', 'Internal link còn ít, nên bổ sung liên kết nội bộ phù hợp.');
+  }
+
+  if (words >= config.thinContent.minWords && internalCount > 0 && internalCount < minimumExpected) {
+    score -= 2;
+    add(flags, notes, 'low_internal_link_density', 'Bài tương đối dài nhưng mật độ internal link còn thấp.');
+  }
+
+  if (externalCount > 0 && internalCount === 0) {
+    score -= 2;
+    add(flags, notes, 'external_without_internal_links', 'Trang có external link nhưng chưa có internal link hỗ trợ điều hướng nội bộ.');
+  }
+
+  if (externalCount >= Number(config.externalLinks?.highExternalCount || 20)) {
+    score -= 1;
+    add(flags, notes, 'many_external_links', 'Trang có nhiều external link, nên kiểm tra chất lượng và mục đích liên kết.');
+  }
+
+  const maxRatio = Number(config.externalLinks?.maxExternalToInternalRatio || 0);
+  if (maxRatio > 0 && internalCount > 0 && externalCount / internalCount > maxRatio) {
+    score -= 1;
+    add(flags, notes, 'high_external_to_internal_ratio', 'Tỷ lệ external link cao hơn internal link, nên rà soát lại chiến lược liên kết.');
   }
 
   return Math.max(0, score);

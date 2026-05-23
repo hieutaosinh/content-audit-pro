@@ -34,7 +34,7 @@ async function main() {
   const clusterSummary = summarizeClusters(clusters);
   const sourceSummary = summarizeSource(inventory, options);
   const cacheSummary = await handleCache(options, { generatedAt, inventory, findings, clusters });
-  const paths = buildOutputPaths(options.outDir);
+  const paths = buildOutputPaths(options.outDir, options.url);
   const llmDecisions = await buildLlmDecisions({ candidatesResult: llmCandidates, inventory, findings, clusters, options, generatedAt, paths });
 
   const reportContext = { generatedAt, inputUrl: options.url, source: options.source, sourceSummary, summary, clusterSummary, cacheSummary, llmCandidateSummary: llmCandidates.summary, llmDecisionSummary: llmDecisions.summary, inventory, findings, clusters };
@@ -45,7 +45,7 @@ async function main() {
   await writeJsonReport(paths.llmCandidatesJson, { ...baseOutput(options, generatedAt, urls.length), summary: llmCandidates.summary, candidates: llmCandidates.candidates });
   await writeJsonReport(paths.llmDecisionsJson, { ...baseOutput(options, generatedAt, urls.length), ...llmDecisions });
   await writeJsonReport(paths.cacheSummaryJson, cacheSummary);
-  await writeCsvReport(paths.inventoryCsv, buildInventoryRows(inventory), inventoryColumns);
+  await writeCsvReport(paths.inventoryCsv, buildInventoryRows(inventory, findings), inventoryColumns);
   await writeCsvReport(paths.actionPlanCsv, buildActionPlanRows(findings), actionPlanColumns);
   await writeMarkdownReport(paths.markdown, reportContext);
   await writeHtmlReport(paths.html, reportContext);
@@ -99,7 +99,8 @@ async function handleCache(options, data) {
   return { enabled: true, cache_path: cachePaths.lastAuditPath, site_key: cachePaths.siteKey, delta };
 }
 
-function buildOutputPaths(outDir) {
+function buildOutputPaths(outDir, inputUrl) {
+  const siteSlug = siteSlugFromUrl(inputUrl);
   return {
     inventoryJson: path.join(outDir, 'inventory.json'),
     findingsJson: path.join(outDir, 'rule_findings.json'),
@@ -108,11 +109,20 @@ function buildOutputPaths(outDir) {
     llmDecisionsJson: path.join(outDir, 'llm_decisions.json'),
     llmLog: path.join(outDir, 'llm_calls.jsonl'),
     cacheSummaryJson: path.join(outDir, 'cache_summary.json'),
-    inventoryCsv: path.join(outDir, 'inventory.csv'),
-    actionPlanCsv: path.join(outDir, 'content_action_plan.csv'),
-    markdown: path.join(outDir, 'content_audit_report.md'),
-    html: path.join(outDir, 'content_audit_report.html')
+    inventoryCsv: path.join(outDir, `inventory-${siteSlug}.csv`),
+    actionPlanCsv: path.join(outDir, `action-plan-${siteSlug}.csv`),
+    markdown: path.join(outDir, `report-${siteSlug}.md`),
+    html: path.join(outDir, `report-${siteSlug}.html`)
   };
+}
+
+function siteSlugFromUrl(input) {
+  try {
+    const host = new URL(input).hostname.replace(/^www\./i, '').toLowerCase();
+    return host.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'site';
+  } catch {
+    return 'site';
+  }
 }
 
 function baseOutput(options, generatedAt, totalUrls) {

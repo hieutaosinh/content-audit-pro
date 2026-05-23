@@ -109,9 +109,20 @@ This file tracks implementation progress in the repository.
 - [x] Added VPS/Linux setup guide: `docs/VPS_LINUX_SETUP.md`
 - [x] README now documents install/test, VPS guide, and first release readiness
 
+### Phase 12 - Link-Aware Scoring And Report Improvements
+
+- [x] Internal link scoring now uses actual extracted internal link counts
+- [x] Link scoring now considers content length and expected internal link density
+- [x] Link scoring now flags pages with external links but no internal links
+- [x] Link scoring now flags high external-to-internal link ratios and high external link counts
+- [x] Default thresholds now include internal/external link scoring settings
+- [x] Markdown report now includes link and image extraction summary
+- [x] HTML report now includes link and image extraction summary
+- [x] Added link-aware scoring tests: `tests/score-rules.test.mjs`
+
 ## Current MVP Status
 
-The project can now run a CLI-first content audit with sitemap, URL list, or public WordPress REST input. It generates inventory, scoring, clusters, cache/delta comparison, LLM candidate selection, optional advisory-only LLM decisions, JSON/CSV/Markdown/HTML reports, deterministic content hashes, internal/external link extraction, and image alt extraction.
+The project can now run a CLI-first content audit with sitemap, URL list, or public WordPress REST input. It generates inventory, scoring, clusters, cache/delta comparison, LLM candidate selection, optional advisory-only LLM decisions, JSON/CSV/Markdown/HTML reports, deterministic content hashes, internal/external link extraction, image alt extraction, and link-aware scoring/report summaries.
 
 Core command:
 
@@ -199,6 +210,19 @@ When running with `--source wp`, `inventory.json` and `inventory.csv` also inclu
 
 WordPress mode uses public GET requests only and does not authenticate or write to WordPress.
 
+## Current Link-Aware Scoring
+
+Link-aware scoring uses deterministic extracted data only. It currently checks:
+
+- pages with no detected internal links
+- pages with fewer internal links than the configured minimum
+- longer pages with low internal link density
+- pages with external links but no internal links
+- pages with many external links
+- pages with high external-to-internal link ratio
+
+This does not crawl discovered links or verify whether those linked pages are alive yet.
+
 ## Current Cache Output
 
 `cache_summary.json` includes:
@@ -254,7 +278,7 @@ Every decision remains advisory-only and requires human review before implementa
 
 ## First Release Notes
 
-Target release tag after Phase 11 is merged and validated:
+Target release tag after validation:
 
 ```bash
 git tag v0.1.0
@@ -279,27 +303,23 @@ npm run audit -- \
 - LLM policy is deterministic and conservative; it may need tuning after real audits
 - LLM client currently supports chat-completions style JSON responses
 - WordPress REST source currently uses public unauthenticated reads only
-- Link extraction does not crawl discovered links; it only records links present in audited page content
+- Link extraction records links present in audited content but does not crawl or validate discovered links
 - Web UI is intentionally deferred until CLI/VPS usage is stable
 
 ## Next Phase
 
-Phase 12 - Link-Aware Scoring And Report Improvements
+Phase 13 - Release Validation And Tagging
 
-Potential files:
+Potential files/actions:
 
-- update `scripts/content-audit/lib/score-rules.mjs`
-- update `scripts/content-audit/lib/report-md.mjs`
-- update `scripts/content-audit/lib/report-html.mjs`
-
-Potential outputs/improvements:
-
-- use internal/external link counts in scoring more explicitly
-- expose link/image extraction summaries in Markdown and HTML reports
-- add clearer Vietnamese guidance for internal linking and image alt cleanup
+- run `npm install`
+- run `npm test`
+- run a smoke audit on a small sitemap or WordPress site
+- fix any test/runtime failures found during validation
+- tag `v0.1.0` after validation passes
 
 Planned safeguards:
 
 - no WordPress write actions
 - no redirect/noindex/delete actions
-- keep outputs deterministic before adding more automation
+- release only after CLI validation passes

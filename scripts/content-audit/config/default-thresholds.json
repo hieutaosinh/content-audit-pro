@@ -25,7 +25,12 @@
     "maxMissingAltRatio": 0.3
   },
   "internalLinks": {
-    "minOutbound": 3
+    "minOutbound": 3,
+    "targetPerThousandWords": 4
+  },
+  "externalLinks": {
+    "maxExternalToInternalRatio": 2,
+    "highExternalCount": 20
   },
   "scoreWeights": {
     "metadata": 15,

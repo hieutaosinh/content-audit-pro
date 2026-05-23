@@ -37,9 +37,17 @@ WordPress mode uses public REST API reads only. LLM output is advisory-only and 
 
 ## Install
 
+Requirements:
+
+- Node.js 20+
+- npm
+
 ```bash
 npm install
+npm test
 ```
+
+For VPS/Linux deployment notes, see `docs/VPS_LINUX_SETUP.md`.
 
 ## Run With Sitemap
 
@@ -213,6 +221,23 @@ content_audit_report.html
 `content_action_plan.csv` includes practical next actions for SEO/content review.
 
 `content_audit_report.md` and `content_audit_report.html` are Vietnamese-first summary reports.
+
+## First Release Readiness
+
+This repository is prepared for a first CLI-only release target:
+
+- `npm install`
+- `npm test`
+- `npm run audit -- ...`
+- Linux/VPS setup guide in `docs/VPS_LINUX_SETUP.md`
+- `.gitignore` excludes local audit outputs, cache, environment files, dependencies, and logs
+
+Recommended release tag after Phase 11 is merged and validated:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
 
 ## Scoring
 

@@ -12,8 +12,6 @@ This file tracks implementation progress in the repository.
 - [x] Added CLI entry file: `scripts/content-audit/content-audit.mjs`
 - [x] Added CLI parser: `scripts/content-audit/lib/cli-args.mjs`
 
-Note: `.gitignore` was attempted but the connector blocked the file creation. Add it manually or retry later.
-
 ### Phase 1 - URL Collection
 
 - [x] Added URL normalization helper: `normalize-url.mjs`
@@ -103,12 +101,23 @@ Note: `.gitignore` was attempted but the connector blocked the file creation. Ad
 - [x] Inventory CSV now includes link counts and `content_hash`
 - [x] README now documents Phase 10 outputs and deterministic link/hash behavior
 
+### Phase 11 - First Release Hardening
+
+- [x] Added `.gitignore` for dependencies, env files, local audit outputs, cache, logs, and build artifacts
+- [x] Added content hash tests: `tests/content-hash.test.mjs`
+- [x] Added HTML extraction tests: `tests/extract-page.test.mjs`
+- [x] Added VPS/Linux setup guide: `docs/VPS_LINUX_SETUP.md`
+- [x] README now documents install/test, VPS guide, and first release readiness
+
 ## Current MVP Status
 
-The project can now run a basic inventory, scoring, report, cluster, re-audit comparison, LLM-needed candidate selection, optional advisory-only LLM review, WordPress REST read-only source collection, deterministic content hashing, internal/external link extraction, and image alt extraction:
+The project can now run a CLI-first content audit with sitemap, URL list, or public WordPress REST input. It generates inventory, scoring, clusters, cache/delta comparison, LLM candidate selection, optional advisory-only LLM decisions, JSON/CSV/Markdown/HTML reports, deterministic content hashes, internal/external link extraction, and image alt extraction.
+
+Core command:
 
 ```bash
 npm install
+npm test
 npm run audit -- \
   --url https://example.com/sitemap.xml \
   --source sitemap \
@@ -204,7 +213,7 @@ WordPress mode uses public GET requests only and does not authenticate or write 
 - `persistent_issues`
 - sample URL lists for review
 
-Cache comparison now uses the stronger deterministic `content_hash` for improved change detection.
+Cache comparison uses deterministic `content_hash` for improved change detection.
 
 ## Current LLM Candidate Output
 
@@ -243,6 +252,27 @@ manual_review
 
 Every decision remains advisory-only and requires human review before implementation.
 
+## First Release Notes
+
+Target release tag after Phase 11 is merged and validated:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Recommended validation before tagging:
+
+```bash
+npm install
+npm test
+npm run audit -- \
+  --url https://example.com/sitemap.xml \
+  --source sitemap \
+  --limit 20 \
+  --out audits/content/release-smoke-test
+```
+
 ## Known Limitations
 
 - Cluster logic is still lightweight and deterministic
@@ -250,25 +280,23 @@ Every decision remains advisory-only and requires human review before implementa
 - LLM client currently supports chat-completions style JSON responses
 - WordPress REST source currently uses public unauthenticated reads only
 - Link extraction does not crawl discovered links; it only records links present in audited page content
-- `.gitignore` still needs to be added
+- Web UI is intentionally deferred until CLI/VPS usage is stable
 
 ## Next Phase
 
-Phase 11 - Extraction QA And Link-Aware Scoring
+Phase 12 - Link-Aware Scoring And Report Improvements
 
 Potential files:
 
 - update `scripts/content-audit/lib/score-rules.mjs`
 - update `scripts/content-audit/lib/report-md.mjs`
 - update `scripts/content-audit/lib/report-html.mjs`
-- add focused tests or fixtures for extraction behavior
 
 Potential outputs/improvements:
 
 - use internal/external link counts in scoring more explicitly
-- add broken/empty link QA flags when safe and deterministic
 - expose link/image extraction summaries in Markdown and HTML reports
-- add small deterministic test fixtures before more automation
+- add clearer Vietnamese guidance for internal linking and image alt cleanup
 
 Planned safeguards:
 

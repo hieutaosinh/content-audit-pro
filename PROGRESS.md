@@ -127,15 +127,23 @@ This file tracks implementation progress in the repository.
 - [x] Added changelog: `CHANGELOG.md`
 - [x] README now links release validation docs and CI/readiness notes
 
+### Phase 14 - VPS Validation Fixes
+
+- [x] Fixed Markdown report syntax crash triggered by `npm run audit:help`
+- [x] Aligned link normalization test expectation with current extraction behavior
+- [x] Bumped `fast-xml-parser` dependency to address reported moderate audit finding
+
 ## Current MVP Status
 
 The project can now run a CLI-first content audit with sitemap, URL list, or public WordPress REST input. It generates inventory, scoring, clusters, cache/delta comparison, LLM candidate selection, optional advisory-only LLM decisions, JSON/CSV/Markdown/HTML reports, deterministic content hashes, internal/external link extraction, image alt extraction, and link-aware scoring/report summaries.
 
-Core command:
+Core validation command:
 
 ```bash
 npm install
 npm test
+npm run audit:help
+npm audit
 npm run audit -- \
   --url https://example.com/sitemap.xml \
   --source sitemap \
@@ -238,6 +246,7 @@ Before tagging `v0.1.0`, validate from a clean checkout or VPS:
 npm install
 npm test
 npm run audit:help
+npm audit
 npm run audit -- \
   --url https://example.com/sitemap.xml \
   --source sitemap \
@@ -320,7 +329,7 @@ git push origin v0.1.0
 
 ## Next Phase
 
-Phase 14 - Real-Site Audit Feedback And Calibration
+Phase 15 - Real-Site Audit Feedback And Calibration
 
 Potential files/actions:
 

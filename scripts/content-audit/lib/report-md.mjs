@@ -6,12 +6,13 @@ export async function writeMarkdownReport(filePath, report) {
 }
 
 export function buildMarkdownReport(report) {
-  const { generatedAt, inputUrl, source, sourceSummary, summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary, findings, clusters = [] } = report;
+  const { generatedAt, inputUrl, source, sourceSummary, summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary, inventory = [], findings, clusters = [] } = report;
   const highRisk = findings.filter((item) => item.severity === 'high_risk');
   const weak = findings.filter((item) => item.severity === 'weak');
   const needsReview = findings.filter((item) => item.severity === 'needs_review');
   const topIssues = [...highRisk, ...weak, ...needsReview].slice(0, 20);
   const priorityClusters = clusters.filter((item) => ['high', 'medium'].includes(item.risk)).slice(0, 20);
+  const extractionSummary = summarizeExtraction(inventory);
 
   return `# Báo cáo Content Audit
 
@@ -34,9 +35,13 @@ export function buildMarkdownReport(report) {
 
 ${buildSourceSection(sourceSummary)}
 
+## Tóm tắt liên kết và hình ảnh
+
+${buildExtractionSection(extractionSummary)}
+
 ## Nhận định nhanh
 
-${buildQuickComment(summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary)}
+${buildQuickComment(summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary, extractionSummary)}
 
 ## So sánh với lần audit trước
 
@@ -62,6 +67,8 @@ ${buildClusterTable(priorityClusters)}
 
 - Trang rủi ro cao: kiểm tra lại indexability, nội dung mỏng, lỗi fetch hoặc thiếu metadata nghiêm trọng.
 - Trang yếu: ưu tiên cập nhật title, meta description, H1/H2, bổ sung nội dung và internal link.
+- Trang có ít internal link: thêm liên kết đến bài liên quan, trang dịch vụ, danh mục hoặc bài trụ cột phù hợp.
+- Trang thiếu alt ảnh: bổ sung alt text mô tả ảnh tự nhiên, tránh nhồi keyword.
 - Cụm trùng lặp/chồng chéo: chưa tự merge/redirect; cần review thủ công để chọn bài trụ cột.
 - Nếu dùng nguồn WordPress REST, ưu tiên kiểm tra thêm publish date, modified date, slug, category và tag trong `inventory.csv`.
 - Chỉ gửi các URL/cụm có trong `llm_candidates.json` sang AI để tiết kiệm token.
@@ -88,11 +95,50 @@ function buildSourceSection(summary) {
   return rows.join('\n');
 }
 
-function buildQuickComment(summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary) {
+function summarizeExtraction(inventory) {
+  const pages = Array.isArray(inventory) ? inventory : [];
+  const totalPages = pages.length;
+  const totalInternalLinks = pages.reduce((sum, page) => sum + arrayLength(page.internal_links), 0);
+  const totalExternalLinks = pages.reduce((sum, page) => sum + arrayLength(page.external_links), 0);
+  const pagesWithoutInternalLinks = pages.filter((page) => arrayLength(page.internal_links) === 0).length;
+  const pagesWithExternalNoInternal = pages.filter((page) => arrayLength(page.external_links) > 0 && arrayLength(page.internal_links) === 0).length;
+  const totalImages = pages.reduce((sum, page) => sum + Number(page.images_total || 0), 0);
+  const totalMissingAlt = pages.reduce((sum, page) => sum + Number(page.images_missing_alt || 0), 0);
+
+  return {
+    total_pages: totalPages,
+    total_internal_links: totalInternalLinks,
+    total_external_links: totalExternalLinks,
+    average_internal_links: totalPages ? round(totalInternalLinks / totalPages) : 0,
+    average_external_links: totalPages ? round(totalExternalLinks / totalPages) : 0,
+    pages_without_internal_links: pagesWithoutInternalLinks,
+    pages_with_external_no_internal: pagesWithExternalNoInternal,
+    total_images: totalImages,
+    total_images_missing_alt: totalMissingAlt,
+    missing_alt_ratio: totalImages ? round((totalMissingAlt / totalImages) * 100) : 0
+  };
+}
+
+function buildExtractionSection(summary) {
+  if (!summary || summary.total_pages === 0) return 'Chưa có dữ liệu liên kết/hình ảnh để tổng hợp.';
+  return [
+    `- Tổng internal links phát hiện: ${summary.total_internal_links}`,
+    `- Trung bình internal links / URL: ${summary.average_internal_links}`,
+    `- URL chưa có internal link: ${summary.pages_without_internal_links}`,
+    `- Tổng external links phát hiện: ${summary.total_external_links}`,
+    `- Trung bình external links / URL: ${summary.average_external_links}`,
+    `- URL có external link nhưng chưa có internal link: ${summary.pages_with_external_no_internal}`,
+    `- Tổng ảnh: ${summary.total_images}`,
+    `- Ảnh thiếu alt: ${summary.total_images_missing_alt} (${summary.missing_alt_ratio}%)`
+  ].join('\n');
+}
+
+function buildQuickComment(summary, clusterSummary, cacheSummary, llmCandidateSummary, llmDecisionSummary, extractionSummary) {
   if ((llmDecisionSummary?.requires_human_approval || 0) > 0) return 'Đã có quyết định AI advisory-only cần người duyệt trước khi áp dụng.';
   if (cacheSummary?.delta?.persistent_issues > 0) return 'Website còn một số vấn đề lặp lại qua nhiều lần audit, nên ưu tiên xử lý nhóm này.';
   if ((llmCandidateSummary?.high_priority || 0) > 0) return 'Có ứng viên ưu tiên cao cần AI review, nên xử lý nhóm này trước khi tạo kế hoạch content sâu hơn.';
   if (summary.total === 0) return 'Chưa có URL nào được kiểm tra.';
+  if ((extractionSummary?.pages_without_internal_links || 0) > 0) return 'Một số URL chưa phát hiện internal link, nên ưu tiên bổ sung liên kết nội bộ phù hợp.';
   if ((clusterSummary?.high || 0) > 0) return 'Website có cụm nội dung rủi ro cao, nên review khả năng trùng lặp/cannibalization trước.';
   if (summary.high_risk > 0) return 'Website có một số URL rủi ro cao, nên xử lý nhóm này trước.';
   if ((clusterSummary?.medium || 0) > 0) return 'Website có một số cụm nội dung chồng chéo, nên rà soát để tránh phân tán tín hiệu SEO.';
@@ -157,6 +203,14 @@ function buildClusterTable(items) {
 
   const rows = items.map((item) => `| ${item.cluster_id} | ${escapePipe(item.topic_hint)} | ${item.url_count} | ${item.risk} | ${escapePipe(item.server_reason)} |`);
   return ['| Cluster | Chủ đề gợi ý | Số URL | Rủi ro | Lý do |', '| --- | --- | ---: | --- | --- |', ...rows].join('\n');
+}
+
+function arrayLength(value) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function round(value) {
+  return Math.round(Number(value || 0) * 10) / 10;
 }
 
 function escapePipe(value) {
